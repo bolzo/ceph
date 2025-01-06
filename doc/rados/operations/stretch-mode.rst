@@ -94,6 +94,29 @@ configuration across the entire cluster. Conversely, opt for a ``stretch pool``
 when you need a particular pool to be replicated across ``more than two data centers``,
 providing a more granular level of control and a larger cluster size.
 
+Limitations
+-----------
+
+Individual Stretch Pools do not support I/O operations during a netsplit
+scenario between two or more zones. While the cluster remains accessible for
+basic Ceph commands, I/O usage remains unavailable until the netsplit is
+resolved. This is different from ``stretch mode``, where the tiebreaker monitor
+can isolate one zone of the cluster and continue I/O operations in degraded
+mode during a netsplit. See :ref:`stretch_mode1`
+
+Ceph is designed to tolerate multiple host failures. However, if more than 25% of
+the OSDs in the cluster go down, Ceph may stop marking OSDs as out which will prevent rebalancing
+and some PGs might go inactive. This behavior is controlled by the ``mon_osd_min_in_ratio`` parameter.
+By default, mon_osd_min_in_ratio is set to 0.75, meaning that at least 75% of the OSDs
+in the cluster must remain ``active`` before any additional OSDs can be marked out.
+This setting prevents too many OSDs from being marked out as this might lead to significant
+data movement. The data movement can cause high client I/O impact and long recovery times when
+the OSDs are returned to service. If Ceph stops marking OSDs as out, some PGs may fail to
+rebalance to surviving OSDs, potentially leading to ``inactive`` PGs.
+See https://tracker.ceph.com/issues/68338 for more information.
+
+.. _stretch_mode1:
+
 Stretch Mode
 ============
 Stretch mode is designed to handle deployments in which you cannot guarantee the
@@ -246,6 +269,34 @@ duration of the downtime when peering (which makes failover to the other site
 possible, if needed).
 
 .. _Changing Monitor elections: ../change-mon-elections
+
+Exiting Stretch Mode
+=====================
+To exit stretch mode, run the following command:
+
+.. prompt:: bash $
+
+   ceph mon disable_stretch_mode [{crush_rule}] --yes-i-really-mean-it
+
+
+.. describe:: {crush_rule}
+
+   The CRUSH rule that the user wants all pools to move back to. If this
+   is not specified, the pools will move back to the default CRUSH rule.
+
+   :Type: String
+   :Required: No.
+
+The command will move the cluster back to normal mode,
+and the cluster will no longer be in stretch mode.
+All pools will move its ``size`` and ``min_size``
+back to the default values it started with.
+At this point the user is responsible for scaling down the cluster
+to the desired number of OSDs if they choose to operate with less number of OSDs.
+
+Please note that the command will not execute when the cluster is in
+``recovery stretch mode``. The command will only execute when the cluster
+is in ``degraded stretch mode`` or ``healthy stretch mode``.
 
 Limitations of Stretch Mode 
 ===========================

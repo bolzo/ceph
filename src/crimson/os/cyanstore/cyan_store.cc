@@ -12,6 +12,7 @@
 
 #include "crimson/common/buffer_io.h"
 #include "crimson/common/config_proxy.h"
+#include "crimson/common/perf_counters_collection.h"
 #include "cyan_collection.h"
 #include "cyan_object.h"
 
@@ -141,6 +142,12 @@ CyanStore::list_collections()
         std::move(collections));
     });
   });
+}
+
+seastar::future<std::string>
+CyanStore::get_default_device_class()
+{
+  return seastar::make_ready_future<std::string>("");
 }
 
 CyanStore::mount_ertr::future<> CyanStore::Shard::mount()

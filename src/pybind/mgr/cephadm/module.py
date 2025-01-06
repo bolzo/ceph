@@ -30,7 +30,7 @@ import multiprocessing.pool
 import subprocess
 from prettytable import PrettyTable
 
-import ceph.cephadm.images as default_images
+from ceph.cephadm.images import DefaultImages
 from ceph.deployment import inventory
 from ceph.deployment.drive_group import DriveGroupSpec
 from ceph.deployment.service_spec import \
@@ -216,96 +216,6 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule,
             default=DEFAULT_IMAGE,
             desc='Container image name, without the tag',
             runtime=True,
-        ),
-        Option(
-            'container_image_prometheus',
-            default=default_images.DEFAULT_PROMETHEUS_IMAGE,
-            desc='Prometheus container image',
-        ),
-        Option(
-            'container_image_nvmeof',
-            default=default_images.DEFAULT_NVMEOF_IMAGE,
-            desc='Nvme-of container image',
-        ),
-        Option(
-            'container_image_grafana',
-            default=default_images.DEFAULT_GRAFANA_IMAGE,
-            desc='Prometheus container image',
-        ),
-        Option(
-            'container_image_alertmanager',
-            default=default_images.DEFAULT_ALERTMANAGER_IMAGE,
-            desc='Prometheus container image',
-        ),
-        Option(
-            'container_image_node_exporter',
-            default=default_images.DEFAULT_NODE_EXPORTER_IMAGE,
-            desc='Prometheus container image',
-        ),
-        Option(
-            'container_image_loki',
-            default=default_images.DEFAULT_LOKI_IMAGE,
-            desc='Loki container image',
-        ),
-        Option(
-            'container_image_promtail',
-            default=default_images.DEFAULT_PROMTAIL_IMAGE,
-            desc='Promtail container image',
-        ),
-        Option(
-            'container_image_haproxy',
-            default=default_images.DEFAULT_HAPROXY_IMAGE,
-            desc='HAproxy container image',
-        ),
-        Option(
-            'container_image_keepalived',
-            default=default_images.DEFAULT_KEEPALIVED_IMAGE,
-            desc='Keepalived container image',
-        ),
-        Option(
-            'container_image_snmp_gateway',
-            default=default_images.DEFAULT_SNMP_GATEWAY_IMAGE,
-            desc='SNMP Gateway container image',
-        ),
-        Option(
-            'container_image_nginx',
-            default=default_images.DEFAULT_NGINX_IMAGE,
-            desc='Nginx container image',
-        ),
-        Option(
-            'container_image_oauth2_proxy',
-            default=default_images.DEFAULT_OAUTH2_PROXY_IMAGE,
-            desc='oauth2-proxy container image',
-        ),
-        Option(
-            'container_image_elasticsearch',
-            default=default_images.DEFAULT_ELASTICSEARCH_IMAGE,
-            desc='elasticsearch container image',
-        ),
-        Option(
-            'container_image_jaeger_agent',
-            default=default_images.DEFAULT_JAEGER_AGENT_IMAGE,
-            desc='Jaeger agent container image',
-        ),
-        Option(
-            'container_image_jaeger_collector',
-            default=default_images.DEFAULT_JAEGER_COLLECTOR_IMAGE,
-            desc='Jaeger collector container image',
-        ),
-        Option(
-            'container_image_jaeger_query',
-            default=default_images.DEFAULT_JAEGER_QUERY_IMAGE,
-            desc='Jaeger query container image',
-        ),
-        Option(
-            'container_image_samba',
-            default=default_images.DEFAULT_SAMBA_IMAGE,
-            desc='Samba/SMB container image',
-        ),
-        Option(
-            'container_image_samba_metrics',
-            default=default_images.DEFAULT_SAMBA_METRICS_IMAGE,
-            desc='Samba/SMB metrics exporter container image',
         ),
         Option(
             'warn_on_stray_hosts',
@@ -543,6 +453,8 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule,
             desc="Default address for RedFish API (oob management)."
         ),
     ]
+    for image in DefaultImages:
+        MODULE_OPTIONS.append(Option(image.key, default=image.image_ref, desc=image.desc))
 
     def __init__(self, *args: Any, **kwargs: Any):
         super(CephadmOrchestrator, self).__init__(*args, **kwargs)
@@ -3499,6 +3411,33 @@ Then run the following:
         return f'Added setting {setting} with value {value} to tuned profile {profile_name}'
 
     @handle_orch_error
+    def tuned_profile_add_settings(self, profile_name: str, settings: dict) -> str:
+        if profile_name not in self.tuned_profiles:
+            raise OrchestratorError(
+                f"Tuned profile {profile_name} does not exist. Cannot add setting."
+            )
+        self.tuned_profiles.add_settings(profile_name, settings)
+        results = [
+            f"Added setting {key} with value {value} to tuned profile {profile_name}"
+            for key, value in settings.items()
+        ]
+        self._kick_serve_loop()
+        return "\n".join(results)
+
+    @handle_orch_error
+    def tuned_profile_rm_settings(self, profile_name: str, settings: List[str]) -> str:
+        if profile_name not in self.tuned_profiles:
+            raise OrchestratorError(
+                f"Tuned profile {profile_name} does not exist. Cannot remove setting."
+            )
+        self.tuned_profiles.rm_settings(profile_name, settings)
+        results = [
+            f'Removed setting {settings} from tuned profile {profile_name}'
+        ]
+        self._kick_serve_loop()
+        return "\n".join(results)
+
+    @handle_orch_error
     def tuned_profile_rm_setting(self, profile_name: str, setting: str) -> str:
         if profile_name not in self.tuned_profiles:
             raise OrchestratorError(
@@ -3986,6 +3925,7 @@ Then run the following:
         return self.to_remove_osds.all_osds()
 
     @handle_orch_error
+    @host_exists()
     def drain_host(self, hostname: str, force: bool = False, keep_conf_keyring: bool = False, zap_osd_devices: bool = False) -> str:
         """
         Drain all daemons from a host.

@@ -10,6 +10,7 @@
 
 #include "include/common_fwd.h"
 #include "osd_operation.h"
+#include "osd/osd_types_fmt.h"
 #include "msg/MessageRef.h"
 #include "crimson/common/exception.h"
 #include "crimson/common/shared_lru.h"
@@ -481,6 +482,8 @@ public:
     local_state.pg_map.remove_pg(pgid);
     return pg_to_shard_mapping.remove_pg_mapping(pgid);
   }
+
+  Ref<PG> get_pg(spg_t pgid);
 
   crimson::common::CephContext *get_cct() {
     return &(local_state.cct);
