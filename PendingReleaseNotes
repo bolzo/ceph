@@ -1,5 +1,19 @@
 >=20.0.0
 
+* RGW: The User Account feature introduced in Squid provides first-class support for
+  IAM APIs and policy. Our preliminary STS support was instead based on tenants, and
+  exposed some IAM APIs to admins only. This tenant-level IAM functionality is now
+  deprecated in favor of accounts. While we'll continue to support the tenant feature
+  itself for namespace isolation, the following features will be removed no sooner
+  than the V release:
+    * tenant-level IAM APIs like CreateRole, PutRolePolicy and PutUserPolicy,
+    * use of tenant names instead of accounts in IAM policy documents,
+    * interpretation of IAM policy without cross-account policy evaluation,
+    * S3 API support for cross-tenant names such as `Bucket='tenant:bucketname'`
+* RGW: For compatibility with AWS S3, LastModified timestamps are now truncated
+  to the second. Note that during upgrade, users may observe these timestamps
+  moving backwards as a result.
+
 * RBD: All Python APIs that produce timestamps now return "aware" `datetime`
   objects instead of "naive" ones (i.e. those including time zone information
   instead of those not including it).  All timestamps remain to be in UTC but
@@ -34,6 +48,8 @@
   (--yes-i-really-mean-it). This has been added as a precaution to tell the
   users that modifying "max_mds" may not help with troubleshooting or recovery
   effort. Instead, it might further destabilize the cluster.
+* RADOS: Added convenience function `librados::AioCompletion::cancel()` with
+  the same behavior as `librados::IoCtx::aio_cancel()`.
 
 * mgr/restful, mgr/zabbix: both modules, already deprecated since 2020, have been
   finally removed. They have not been actively maintenance in the last years,
@@ -47,6 +63,10 @@
   fuse client for `fallocate` for the default case (i.e. mode == 0) since
   CephFS does not support disk space reservation. The only flags supported are
   `FALLOC_FL_KEEP_SIZE` and `FALLOC_FL_PUNCH_HOLE`.
+* pybind/rados: Fixes WriteOp.zero() in the original reversed order of arguments
+  `offset` and `length`. When pybind calls WriteOp.zero(), the argument passed
+  does not match rados_write_op_zero, and offset and length are swapped, which
+  results in an unexpected response.
 
 * The HeadBucket API now reports the `X-RGW-Bytes-Used` and `X-RGW-Object-Count`
   headers only when the `read-stats` querystring is explicitly included in the

@@ -108,6 +108,7 @@ using ceph::crypto::MD5;
 #define RGW_ATTR_X_ROBOTS_TAG	RGW_ATTR_PREFIX "x-robots-tag"
 #define RGW_ATTR_STORAGE_CLASS  RGW_ATTR_PREFIX "storage_class"
 #define RGW_ATTR_BUCKET_LOGGING RGW_ATTR_PREFIX "logging"
+#define RGW_ATTR_BUCKET_LOGGING_SOURCES RGW_ATTR_PREFIX "logging-sources"
 
 /* S3 Object Lock*/
 #define RGW_ATTR_OBJECT_LOCK        RGW_ATTR_PREFIX "object-lock"
@@ -337,6 +338,7 @@ inline constexpr const char* RGW_REST_STS_XMLNS =
 #define ERR_PRESIGNED_URL_EXPIRED			 2223
 #define ERR_PRESIGNED_URL_DISABLED     2224
 #define ERR_AUTHORIZATION        2225 // SNS 403 AuthorizationError
+#define ERR_ILLEGAL_LOCATION_CONSTRAINT_EXCEPTION 2226
 
 #define ERR_BUSY_RESHARDING      2300 // also in cls_rgw_types.h, don't change!
 #define ERR_NO_SUCH_ENTITY       2301
@@ -1426,6 +1428,7 @@ struct RGWBucketEnt {
   size_t size;
   size_t size_rounded;
   ceph::real_time creation_time;
+  ceph::real_time modification_time;
   uint64_t count;
 
   /* The placement_rule is necessary to calculate per-storage-policy statics

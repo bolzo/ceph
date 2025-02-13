@@ -25,8 +25,10 @@
 #include "common/ceph_json.h"
 #include "common/static_ptr.h"
 #include "common/perf_counters_key.h"
+#include "rgw_cksum.h"
 #include "rgw_cksum_digest.h"
 #include "rgw_common.h"
+#include "common/split.h"
 #include "rgw_tracer.h"
 
 #include "rgw_rados.h"
@@ -915,15 +917,20 @@ void handle_replication_status_header(
   auto attr_iter = attrs.find(RGW_ATTR_OBJ_REPLICATION_STATUS);
   if (attr_iter != attrs.end() && attr_iter->second.to_str() == "PENDING") {
     if (s->object->is_sync_completed(dpp, obj_mtime)) {
-        s->object->set_atomic();
-        rgw::sal::Attrs setattrs, rmattrs;
-        bufferlist bl;
-        bl.append("COMPLETED");
-        setattrs[RGW_ATTR_OBJ_REPLICATION_STATUS] = std::move(bl);
-	int ret = s->object->set_obj_attrs(dpp, &setattrs, &rmattrs, s->yield, 0);
-	if (ret == 0) {
-	  ldpp_dout(dpp, 20) << *s->object << " has amz-replication-status header set to COMPLETED" << dendl;
-	}
+      s->object->set_atomic();
+      rgw::sal::Attrs setattrs, rmattrs;
+      bufferlist bl;
+      bl.append("COMPLETED");
+      setattrs[RGW_ATTR_OBJ_REPLICATION_STATUS] = bl;
+      int ret = s->object->set_obj_attrs(dpp, &setattrs, &rmattrs, s->yield, 0);
+      if (ret < 0) {
+        ldpp_dout(dpp, 0) << "ERROR: failed to set object replication status to COMPLETED ret=" << ret << dendl;
+        return;
+      }
+
+      ldpp_dout(dpp, 20) << *s->object << " has amz-replication-status header set to COMPLETED" << dendl;
+
+      attrs[RGW_ATTR_OBJ_REPLICATION_STATUS] = std::move(bl); // update the attrs so that the status is reflected in the response
     }
   }
 }
@@ -3558,54 +3565,62 @@ void RGWCreateBucket::execute(optional_yield y)
   const rgw::SiteConfig& site = *s->penv.site;
   const std::optional<RGWPeriod>& period = site.get_period();
   const RGWZoneGroup& my_zonegroup = site.get_zonegroup();
-
-  if (s->system_request) {
-    // allow system requests to override the target zonegroup. for forwarded
-    // requests, we'll create the bucket for the originating zonegroup
-    createparams.zonegroup_id = s->info.args.get(RGW_SYS_PARAM_PREFIX "zonegroup");
-  }
-
+  const std::string rgwx_zonegroup = s->info.args.get(RGW_SYS_PARAM_PREFIX "zonegroup");
   const RGWZoneGroup* bucket_zonegroup = &my_zonegroup;
-  if (createparams.zonegroup_id.empty()) {
-    // default to the local zonegroup
-    createparams.zonegroup_id = my_zonegroup.id;
-  } else if (period) {
-    auto z = period->period_map.zonegroups.find(createparams.zonegroup_id);
-    if (z == period->period_map.zonegroups.end()) {
-      ldpp_dout(this, 0) << "could not find zonegroup "
-          << createparams.zonegroup_id << " in current period" << dendl;
-      op_ret = -ENOENT;
-      return;
-    }
-    bucket_zonegroup = &z->second;
-  } else if (createparams.zonegroup_id != my_zonegroup.id) {
-    ldpp_dout(this, 0) << "zonegroup does not match current zonegroup "
-        << createparams.zonegroup_id << dendl;
-    op_ret = -ENOENT;
-    return;
-  }
 
-  // validate the LocationConstraint
+  // Validate LocationConstraint if it's provided and enforcement is strict
   if (!location_constraint.empty() && !relaxed_region_enforcement) {
-    // on the master zonegroup, allow any valid api_name. otherwise it has to
-    // match the bucket's zonegroup
-    if (period && my_zonegroup.is_master) {
-      if (!period->period_map.zonegroups_by_api.count(location_constraint)) {
+    if (period) {
+      auto location_iter = period->period_map.zonegroups_by_api.find(location_constraint);
+      if (location_iter == period->period_map.zonegroups_by_api.end()) {
         ldpp_dout(this, 0) << "location constraint (" << location_constraint
             << ") can't be found." << dendl;
         op_ret = -ERR_INVALID_LOCATION_CONSTRAINT;
-        s->err.message = "The specified location-constraint is not valid";
+        s->err.message = fmt::format("The {} location constraint is not valid.",
+                                     location_constraint);
         return;
       }
-    } else if (bucket_zonegroup->api_name != location_constraint) {
+      bucket_zonegroup = &location_iter->second;
+    } else if (location_constraint != my_zonegroup.api_name) { // if we don't have a period, we can only use the current zonegroup - so check if the location matches by api name here
       ldpp_dout(this, 0) << "location constraint (" << location_constraint
-          << ") doesn't match zonegroup (" << bucket_zonegroup->api_name
-          << ')' << dendl;
-      op_ret = -ERR_INVALID_LOCATION_CONSTRAINT;
-      s->err.message = "The specified location-constraint is not valid";
+          << ") doesn't match zonegroup (" << my_zonegroup.api_name << ")" << dendl;
+      op_ret = -ERR_ILLEGAL_LOCATION_CONSTRAINT_EXCEPTION;
+      s->err.message = fmt::format("The {} location constraint is incompatible "
+                                   "for the region specific endpoint this request was sent to.",
+                                   location_constraint);
       return;
     }
   }
+  // If it's a system request, use the provided zonegroup if available
+  else if (s->system_request && !rgwx_zonegroup.empty()) {
+    if (period) {
+      auto zonegroup_iter = period->period_map.zonegroups.find(rgwx_zonegroup);
+      if (zonegroup_iter == period->period_map.zonegroups.end()) {
+        ldpp_dout(this, 0) << "could not find zonegroup " << rgwx_zonegroup
+            << " in current period" << dendl;
+        op_ret = -ENOENT;
+        return;
+      }
+      bucket_zonegroup = &zonegroup_iter->second;
+    }
+  }
+
+  const bool enforce_location_match =
+    !period ||               // No period: no multisite, so no need to enforce location match.
+    !s->system_request ||    // All user requests are enforced to match zonegroup's location.
+    !my_zonegroup.is_master; // but if it's a system request (forwarded) only allow remote creation on master zonegroup.
+  if (enforce_location_match && !my_zonegroup.equals(bucket_zonegroup->get_id())) {
+    ldpp_dout(this, 0) << "location constraint (" << bucket_zonegroup->api_name
+        << ") doesn't match zonegroup (" << my_zonegroup.api_name << ")" << dendl;
+    op_ret = -ERR_ILLEGAL_LOCATION_CONSTRAINT_EXCEPTION;
+    s->err.message = fmt::format("The {} location constraint is incompatible "
+                                 "for the region specific endpoint this request was sent to.",
+                                 bucket_zonegroup->api_name);
+    return;
+  }
+
+  // Set the final zonegroup ID
+  createparams.zonegroup_id = bucket_zonegroup->id;
 
   // select and validate the placement target
   op_ret = select_bucket_placement(this, *bucket_zonegroup, s->user->get_info(),
@@ -3614,7 +3629,7 @@ void RGWCreateBucket::execute(optional_yield y)
     return;
   }
 
-  if (bucket_zonegroup == &my_zonegroup) {
+  if (my_zonegroup.equals(bucket_zonegroup->get_id())) {
     // look up the zone placement pool
     createparams.zone_placement = rgw::find_zone_placement(
         this, site.get_zone_params(), createparams.placement_rule);
@@ -3703,7 +3718,6 @@ void RGWCreateBucket::execute(optional_yield y)
 
   if (!driver->is_meta_master()) {
     // apply bucket creation on the master zone first
-    bufferlist in_data;
     JSONParser jp;
     op_ret = rgw_forward_request_to_master(this, *s->penv.site, s->owner.id,
                                            &in_data, &jp, s->info, y);
@@ -3780,7 +3794,10 @@ void RGWCreateBucket::execute(optional_yield y)
       s->bucket->get_info().has_website = !s->bucket->get_info().website_conf.is_empty();
 
       /* This will also set the quota on the bucket. */
-      op_ret = s->bucket->merge_and_store_attrs(this, createparams.attrs, y);
+      s->bucket->set_attrs(std::move(createparams.attrs));
+      constexpr bool exclusive = false; // overwrite
+      constexpr ceph::real_time no_set_mtime{};
+      op_ret = s->bucket->put_info(this, exclusive, no_set_mtime, y);
     } while (op_ret == -ECANCELED && tries++ < 20);
 
     /* Restore the proper return code. */
@@ -4331,6 +4348,9 @@ void RGWPutObj::execute(optional_yield y)
       }
       return;
     }
+
+    multipart_cksum_type = upload->cksum_type;
+
     /* upload will go out of scope, so copy the dest placement for later use */
     s->dest_placement = *pdest_placement;
     pdest_placement = &s->dest_placement;
@@ -4461,11 +4481,12 @@ void RGWPutObj::execute(optional_yield y)
     /* optional streaming checksum */
     try {
       cksum_filter =
-	rgw::putobj::RGWPutObj_Cksum::Factory(filter, *s->info.env);
+	rgw::putobj::RGWPutObj_Cksum::Factory(filter, *s->info.env, multipart_cksum_type);
     } catch (const rgw::io::Exception& e) {
       op_ret = -e.code().value();
       return;
     }
+
     if (cksum_filter) {
       filter = &*cksum_filter;
     }
@@ -4612,10 +4633,12 @@ void RGWPutObj::execute(optional_yield y)
 
   if (cksum_filter) {
     const auto& hdr = cksum_filter->header();
+    auto expected_ck = cksum_filter->expected(*s->info.env);
     auto cksum_verify =
       cksum_filter->verify(*s->info.env); // valid or no supplied cksum
     cksum = get<1>(cksum_verify);
-    if (std::get<0>(cksum_verify)) {
+    if ((!expected_ck) ||
+	std::get<0>(cksum_verify)) {
       buffer::list cksum_bl;
 
       ldpp_dout_fmt(this, 16,
@@ -4623,14 +4646,13 @@ void RGWPutObj::execute(optional_yield y)
 		    "\n\tcomputed={} == \n\texpected={}",
 		    hdr.second,
 		    cksum->to_armor(),
-		    cksum_filter->expected(*s->info.env));
+		    (!!expected_ck) ? expected_ck : "(checksum unavailable)");
 
       cksum->encode(cksum_bl);
       emplace_attr(RGW_ATTR_CKSUM, std::move(cksum_bl));
     } else {
       /* content checksum mismatch */
       auto computed_ck = cksum->to_armor();
-      auto expected_ck = cksum_filter->expected(*s->info.env);
 
       ldpp_dout_fmt(this, 4,
 		    "{} content checksum mismatch"
@@ -4833,7 +4855,8 @@ void RGWPostObj::execute(optional_yield y)
     /* optional streaming checksum */
     try {
       cksum_filter =
-	rgw::putobj::RGWPutObj_Cksum::Factory(filter, *s->info.env);
+	rgw::putobj::RGWPutObj_Cksum::Factory(
+	  filter, *s->info.env, rgw::cksum::Type::none /* no override */);
     } catch (const rgw::io::Exception& e) {
       op_ret = -e.code().value();
       return;
@@ -5181,7 +5204,10 @@ void RGWPutMetadataBucket::execute(optional_yield y)
       /* Setting attributes also stores the provided bucket info. Due
        * to this fact, the new quota settings can be serialized with
        * the same call. */
-      op_ret = s->bucket->merge_and_store_attrs(this, attrs, s->yield);
+      s->bucket->set_attrs(attrs);
+      constexpr bool exclusive = false; // overwrite
+      constexpr ceph::real_time no_set_mtime{};
+      op_ret = s->bucket->put_info(this, exclusive, no_set_mtime, s->yield);
       return op_ret;
     }, y);
 }
@@ -5969,8 +5995,6 @@ void RGWGetACLs::execute(optional_yield y)
   acls = ss.str();
 }
 
-
-
 int RGWPutACLs::verify_permission(optional_yield y)
 {
   bool perm;
@@ -5991,6 +6015,74 @@ int RGWPutACLs::verify_permission(optional_yield y)
 
   return 0;
 }
+
+uint16_t RGWGetObjAttrs::recognize_attrs(const std::string& hdr, uint16_t deflt)
+{
+  auto attrs{deflt};
+  auto sa = ceph::split(hdr, ",");
+  for (auto& k : sa) {
+    if (boost::iequals(k, "etag")) {
+      attrs |= as_flag(ReqAttributes::Etag);
+    }
+    if (boost::iequals(k, "checksum")) {
+      attrs |= as_flag(ReqAttributes::Checksum);
+    }
+    if (boost::iequals(k, "objectparts")) {
+      attrs |= as_flag(ReqAttributes::ObjectParts);
+    }
+    if (boost::iequals(k, "objectsize")) {
+      attrs |= as_flag(ReqAttributes::ObjectSize);
+    }
+    if (boost::iequals(k, "storageclass")) {
+      attrs |= as_flag(ReqAttributes::StorageClass);
+    }
+  }
+  return attrs;
+} /* RGWGetObjAttrs::recognize_attrs */
+
+int RGWGetObjAttrs::verify_permission(optional_yield y)
+{
+  bool perm = false;
+  auto [has_s3_existing_tag, has_s3_resource_tag] =
+    rgw_check_policy_condition(this, s);
+
+  if (! rgw::sal::Object::empty(s->object.get())) {
+
+    auto iam_action1 = s->object->get_instance().empty() ?
+      rgw::IAM::s3GetObject :
+      rgw::IAM::s3GetObjectVersion;
+
+    auto iam_action2 = s->object->get_instance().empty() ?
+      rgw::IAM::s3GetObjectAttributes :
+      rgw::IAM::s3GetObjectVersionAttributes;
+
+    if (has_s3_existing_tag || has_s3_resource_tag) {
+      rgw_iam_add_objtags(this, s, has_s3_existing_tag, has_s3_resource_tag);
+    }
+
+    /* XXXX the following conjunction should be &&--but iam_action2 is currently not
+     * hooked up and always fails (but should succeed if the requestor has READ
+     * acess to the object) */
+    perm = (verify_object_permission(this, s, iam_action1) || /* && */
+	    verify_object_permission(this, s, iam_action2));
+  }
+
+  if (! perm) {
+    return -EACCES;
+  }
+
+  return 0;
+}
+
+void RGWGetObjAttrs::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWGetObjAttrs::execute(optional_yield y)
+{
+  RGWGetObj::execute(y);
+} /* RGWGetObjAttrs::execute */
 
 int RGWGetLC::verify_permission(optional_yield y)
 {
@@ -6557,6 +6649,9 @@ void RGWInitMultipart::execute(optional_yield y)
     return;
   }
 
+  encode_obj_tags_attr(obj_tags, attrs);
+  rgw_cond_decode_objtags(s, attrs);
+
   std::unique_ptr<rgw::sal::MultipartUpload> upload;
   upload = s->bucket->get_multipart_upload(s->object->get_name(),
 				       upload_id);
@@ -6658,6 +6753,14 @@ try_sum_part_cksums(const DoutPrefixProvider *dpp,
   for (auto& part : parts_map) {
     ++parts_ix;
     auto& part_cksum = part.second->get_cksum();
+
+    if (! part_cksum) {
+      ldpp_dout_fmt(dpp, 0,
+		    "ERROR: multipart part checksum not present (ix=={})",
+		    parts_ix);
+      op_ret = -ERR_INVALID_REQUEST;
+      return op_ret;
+    }
 
     ldpp_dout_fmt(dpp, 16,
 		  "INFO: {} iterate part: {} {} {}",
@@ -8487,6 +8590,10 @@ void RGWGetBucketPolicy::execute(optional_yield y)
 
 void RGWDeleteBucketPolicy::send_response()
 {
+  if (!op_ret) {
+    /* A successful Delete Bucket Policy should return a 204 on success */
+    op_ret = STATUS_NO_CONTENT;
+  }
   if (op_ret) {
     set_req_state_err(s, op_ret);
   }
@@ -9162,4 +9269,3 @@ void rgw_slo_entry::decode_json(JSONObj *obj)
   JSONDecoder::decode_json("etag", etag, obj);
   JSONDecoder::decode_json("size_bytes", size_bytes, obj);
 };
-

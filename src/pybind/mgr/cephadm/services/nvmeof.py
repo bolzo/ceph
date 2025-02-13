@@ -9,11 +9,13 @@ from ceph.deployment.service_spec import NvmeofServiceSpec
 
 from orchestrator import OrchestratorError, DaemonDescription, DaemonDescriptionStatus
 from .cephadmservice import CephadmDaemonDeploySpec, CephService
+from .service_registry import register_cephadm_service
 from .. import utils
 
 logger = logging.getLogger(__name__)
 
 
+@register_cephadm_service
 class NvmeofService(CephService):
     TYPE = 'nvmeof'
     PROMETHEUS_PORT = 10008
@@ -47,6 +49,7 @@ class NvmeofService(CephService):
 
         # TODO: check if we can force jinja2 to generate dicts with double quotes instead of using json.dumps
         transport_tcp_options = json.dumps(spec.transport_tcp_options) if spec.transport_tcp_options else None
+        iobuf_options = json.dumps(spec.iobuf_options) if spec.iobuf_options else None
         name = '{}.{}'.format(utils.name_to_config_section('nvmeof'), nvmeof_gw_id)
         rados_id = name[len('client.'):] if name.startswith('client.') else name
 
@@ -67,6 +70,7 @@ class NvmeofService(CephService):
             'rpc_socket_dir': '/var/tmp/',
             'rpc_socket_name': 'spdk.sock',
             'transport_tcp_options': transport_tcp_options,
+            'iobuf_options': iobuf_options,
             'rados_id': rados_id
         }
         gw_conf = self.mgr.template.render('services/nvmeof/ceph-nvmeof.conf.j2', context)

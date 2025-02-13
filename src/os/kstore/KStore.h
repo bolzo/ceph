@@ -180,6 +180,7 @@ public:
     int next() override;
     std::string key() override;
     ceph::buffer::list value() override;
+    std::string_view value_as_sv() override;
     int status() override {
       return 0;
     }
@@ -441,7 +442,7 @@ public:
   }
   void dump_perf_counters(ceph::Formatter *f) override {
     f->open_object_section("perf_counters");
-    logger->dump_formatted(f, false, false);
+    logger->dump_formatted(f, false, select_labeled_t::unlabeled);
     f->close_section();
   }
   void get_db_statistics(ceph::Formatter *f) override {
@@ -552,6 +553,13 @@ public:
     CollectionHandle& c,              ///< [in] collection
     const ghobject_t &oid  ///< [in] object
     ) override;
+
+  int omap_iterate(
+    CollectionHandle &c,   ///< [in] collection
+    const ghobject_t &oid, ///< [in] object
+    omap_iter_seek_t start_from, ///< [in] where the iterator should point to at the beginning
+    std::function<omap_iter_ret_t(std::string_view, std::string_view)> f
+  ) override;
 
   void set_fsid(uuid_d u) override {
     fsid = u;

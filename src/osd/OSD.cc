@@ -37,6 +37,7 @@
 #include "osd/PG.h"
 #include "osd/scrubber/scrub_machine.h"
 #include "osd/scrubber/pg_scrubber.h"
+#include "osd/ECCommon.h"
 
 #include "include/types.h"
 #include "include/compat.h"
@@ -191,6 +192,7 @@ using ceph::make_mutex;
 using namespace ceph::osd::scheduler;
 using TOPNSPC::common::cmd_getval;
 using TOPNSPC::common::cmd_getval_or;
+using namespace std::literals;
 
 static ostream& _prefix(std::ostream* _dout, int whoami, epoch_t epoch) {
   return *_dout << "osd." << whoami << " " << epoch << " ";
@@ -4348,6 +4350,46 @@ void OSD::final_init()
     "inject metadata error to an object");
   ceph_assert(r == 0);
   r = admin_socket->register_command(
+    "injectecreaderr " \
+    "name=pool,type=CephString " \
+    "name=objname,type=CephObjectname " \
+    "name=shardid,type=CephInt,req=true,range=0|255 " \
+    "name=type,type=CephInt,req=false " \
+    "name=when,type=CephInt,req=false " \
+    "name=duration,type=CephInt,req=false",
+    test_ops_hook,
+    "inject error for read of object in an EC pool");
+  ceph_assert(r == 0);
+  r = admin_socket->register_command(
+    "injectecclearreaderr " \
+    "name=pool,type=CephString " \
+    "name=objname,type=CephObjectname " \
+    "name=shardid,type=CephInt,req=true,range=0|255 " \
+    "name=type,type=CephInt,req=false",
+    test_ops_hook,
+    "clear read error injects for object in an EC pool");
+  ceph_assert(r == 0);
+  r = admin_socket->register_command(
+    "injectecwriteerr " \
+    "name=pool,type=CephString " \
+    "name=objname,type=CephObjectname " \
+    "name=shardid,type=CephInt,req=true,range=0|255 " \
+    "name=type,type=CephInt,req=false " \
+    "name=when,type=CephInt,req=false " \
+    "name=duration,type=CephInt,req=false",
+    test_ops_hook,
+    "inject error for write of object in an EC pool");
+  ceph_assert(r == 0);
+  r = admin_socket->register_command(
+    "injectecclearwriteerr " \
+    "name=pool,type=CephString " \
+    "name=objname,type=CephObjectname " \
+    "name=shardid,type=CephInt,req=true,range=0|255 " \
+    "name=type,type=CephInt,req=false",
+    test_ops_hook,
+    "clear write error inject for object in an EC pool");
+  ceph_assert(r == 0);
+  r = admin_socket->register_command(
     "set_recovery_delay " \
     "name=utime,type=CephInt,req=false",
     test_ops_hook,
@@ -6487,8 +6529,10 @@ void TestOpsSocketHook::test_ops(OSDService *service, ObjectStore *store,
   //directly request the osd make a change.
   if (command == "setomapval" || command == "rmomapkey" ||
       command == "setomapheader" || command == "getomap" ||
-      command == "truncobj" || command == "injectmdataerr" ||
-      command == "injectdataerr"
+      command == "truncobj" ||
+      command == "injectmdataerr" || command == "injectdataerr" ||
+      command == "injectecreaderr" || command == "injectecclearreaderr" ||
+      command == "injectecwriteerr" || command == "injectecclearwriteerr"
     ) {
     pg_t rawpg;
     int64_t pool;
@@ -6527,8 +6571,21 @@ void TestOpsSocketHook::test_ops(OSDService *service, ObjectStore *store,
     ghobject_t gobj(obj, ghobject_t::NO_GEN, shard_id_t(uint8_t(shardid)));
     spg_t pgid(curmap->raw_pg_to_pg(rawpg), shard_id_t(shardid));
     if (curmap->pg_is_ec(rawpg)) {
-        if ((command != "injectdataerr") && (command != "injectmdataerr")) {
-            ss << "Must not call on ec pool, except injectdataerr or injectmdataerr";
+        if ((command != "injectdataerr") &&
+	    (command != "injectmdataerr") &&
+	    (command != "injectecreaderr") &&
+	    (command != "injectecclearreaderr") &&
+	    (command != "injectecwriteerr") &&
+	    (command != "injectecclearwriteerr")) {
+            ss << "Must not call on ec pool";
+            return;
+        }
+    } else {
+        if ((command == "injectecreaderr") ||
+	    (command == "injecteclearreaderr") ||
+	    (command == "injectecwriteerr") ||
+	    (command == "injecteclearwriteerr")) {
+            ss << "Only supported on ec pool";
             return;
         }
     }
@@ -6607,6 +6664,38 @@ void TestOpsSocketHook::test_ops(OSDService *service, ObjectStore *store,
     } else if (command == "injectmdataerr") {
       store->inject_mdata_error(gobj);
       ss << "ok";
+    } else if (command == "injectecreaderr") {
+      if (service->cct->_conf->bluestore_debug_inject_read_err) {
+	int64_t type = cmd_getval_or<int64_t>(cmdmap, "type", 0);
+        int64_t when = cmd_getval_or<int64_t>(cmdmap, "when", 0);
+        int64_t duration = cmd_getval_or<int64_t>(cmdmap, "duration", 1);
+	ss << ec_inject_read_error(gobj, type, when, duration);
+      } else {
+	ss << "bluestore_debug_inject_read_err not enabled";
+      }
+    } else if (command == "injectecclearreaderr") {
+      if (service->cct->_conf->bluestore_debug_inject_read_err) {
+	int64_t type = cmd_getval_or<int64_t>(cmdmap, "type", 0);
+	ss << ec_inject_clear_read_error(gobj, type);
+      } else {
+	ss << "bluestore_debug_inject_read_err not enabled";
+      }
+    } else if (command == "injectecwriteerr") {
+      if (service->cct->_conf->bluestore_debug_inject_read_err) {
+	int64_t type = cmd_getval_or<int64_t>(cmdmap, "type", 0);
+	int64_t when = cmd_getval_or<int64_t>(cmdmap, "when", 0);
+        int64_t duration = cmd_getval_or<int64_t>(cmdmap, "duration", 1);
+	ss << ec_inject_write_error(gobj, type, when, duration);
+      } else {
+	ss << "bluestore_debug_inject_read_err not enabled";
+      }
+    } else if (command == "injectecclearwriteerr") {
+      if (service->cct->_conf->bluestore_debug_inject_read_err) {
+	int64_t type = cmd_getval_or<int64_t>(cmdmap, "type", 0);
+	ss << ec_inject_clear_write_error(gobj, type);
+      } else {
+	ss << "bluestore_debug_inject_read_err not enabled";
+      }
     }
     return;
   }
@@ -9905,63 +9994,61 @@ void OSD::dequeue_delete(
 
 // --------------------------------
 
-const char** OSD::get_tracked_conf_keys() const
+std::vector<std::string> OSD::get_tracked_keys() const noexcept
 {
-  static const char* KEYS[] = {
-    "osd_max_backfills",
-    "osd_min_recovery_priority",
-    "osd_max_trimming_pgs",
-    "osd_op_complaint_time",
-    "osd_op_log_threshold",
-    "osd_op_history_size",
-    "osd_op_history_duration",
-    "osd_op_history_slow_op_size",
-    "osd_op_history_slow_op_threshold",
-    "osd_enable_op_tracker",
-    "osd_map_cache_size",
-    "osd_pg_epoch_max_lag_factor",
-    "osd_pg_epoch_persisted_max_stale",
-    "osd_recovery_sleep",
-    "osd_recovery_sleep_hdd",
-    "osd_recovery_sleep_ssd",
-    "osd_recovery_sleep_hybrid",
-    "osd_delete_sleep",
-    "osd_delete_sleep_hdd",
-    "osd_delete_sleep_ssd",
-    "osd_delete_sleep_hybrid",
-    "osd_snap_trim_sleep",
-    "osd_snap_trim_sleep_hdd",
-    "osd_snap_trim_sleep_ssd",
-    "osd_snap_trim_sleep_hybrid",
-    "osd_scrub_sleep",
-    "osd_recovery_max_active",
-    "osd_recovery_max_active_hdd",
-    "osd_recovery_max_active_ssd",
+  return {
+    "osd_max_backfills"s,
+    "osd_min_recovery_priority"s,
+    "osd_max_trimming_pgs"s,
+    "osd_op_complaint_time"s,
+    "osd_op_log_threshold"s,
+    "osd_op_history_size"s,
+    "osd_op_history_duration"s,
+    "osd_op_history_slow_op_size"s,
+    "osd_op_history_slow_op_threshold"s,
+    "osd_enable_op_tracker"s,
+    "osd_map_cache_size"s,
+    "osd_pg_epoch_max_lag_factor"s,
+    "osd_pg_epoch_persisted_max_stale"s,
+    "osd_recovery_sleep"s,
+    "osd_recovery_sleep_hdd"s,
+    "osd_recovery_sleep_ssd"s,
+    "osd_recovery_sleep_hybrid"s,
+    "osd_delete_sleep"s,
+    "osd_delete_sleep_hdd"s,
+    "osd_delete_sleep_ssd"s,
+    "osd_delete_sleep_hybrid"s,
+    "osd_snap_trim_sleep"s,
+    "osd_snap_trim_sleep_hdd"s,
+    "osd_snap_trim_sleep_ssd"s,
+    "osd_snap_trim_sleep_hybrid"s,
+    "osd_scrub_sleep"s,
+    "osd_recovery_max_active"s,
+    "osd_recovery_max_active_hdd"s,
+    "osd_recovery_max_active_ssd"s,
     // clog & admin clog
-    "clog_to_monitors",
-    "clog_to_syslog",
-    "clog_to_syslog_facility",
-    "clog_to_syslog_level",
-    "osd_objectstore_fuse",
-    "clog_to_graylog",
-    "clog_to_graylog_host",
-    "clog_to_graylog_port",
-    "host",
-    "fsid",
-    "osd_recovery_delay_start",
-    "osd_client_message_size_cap",
-    "osd_client_message_cap",
-    "osd_heartbeat_min_size",
-    "osd_heartbeat_interval",
-    "osd_object_clean_region_max_num_intervals",
-    "osd_scrub_min_interval",
-    "osd_scrub_max_interval",
-    "osd_op_thread_timeout",
-    "osd_op_thread_suicide_timeout",
-    "osd_max_scrubs",
-    nullptr
+    "clog_to_monitors"s,
+    "clog_to_syslog"s,
+    "clog_to_syslog_facility"s,
+    "clog_to_syslog_level"s,
+    "osd_objectstore_fuse"s,
+    "clog_to_graylog"s,
+    "clog_to_graylog_host"s,
+    "clog_to_graylog_port"s,
+    "host"s,
+    "fsid"s,
+    "osd_recovery_delay_start"s,
+    "osd_client_message_size_cap"s,
+    "osd_client_message_cap"s,
+    "osd_heartbeat_min_size"s,
+    "osd_heartbeat_interval"s,
+    "osd_object_clean_region_max_num_intervals"s,
+    "osd_scrub_min_interval"s,
+    "osd_scrub_max_interval"s,
+    "osd_op_thread_timeout"s,
+    "osd_op_thread_suicide_timeout"s,
+    "osd_max_scrubs"s
   };
-  return KEYS;
 }
 
 void OSD::handle_conf_change(const ConfigProxy& conf,

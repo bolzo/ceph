@@ -8272,6 +8272,198 @@ paths:
       - jwt: []
       tags:
       - NVMe-oF Gateway
+  /api/nvmeof/gateway/log_level:
+    get:
+      parameters:
+      - allowEmptyValue: true
+        in: query
+        name: gw_group
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF Gateway
+    put:
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  type: string
+                log_level:
+                  type: string
+              required:
+              - log_level
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF Gateway
+  /api/nvmeof/gateway/version:
+    get:
+      parameters:
+      - allowEmptyValue: true
+        in: query
+        name: gw_group
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF Gateway
+  /api/nvmeof/spdk/log_level:
+    get:
+      parameters:
+      - allowEmptyValue: true
+        in: query
+        name: gw_group
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF SPDK
+    put:
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  type: string
+                log_level:
+                  type: string
+                print_level:
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF SPDK
+  /api/nvmeof/spdk/log_level/disable:
+    put:
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - NVMe-oF SPDK
   /api/nvmeof/subsystem:
     get:
       parameters:
@@ -10810,6 +11002,10 @@ paths:
       - Prometheus
   /api/rgw/accounts:
     get:
+      description: "\n        List all account ids or all detailed account info based\
+        \ on the 'detailed' query parameter.\n\n        - If detailed=True, returns\
+        \ detailed account info.\n        - If detailed=False, returns only account\
+        \ ids.\n        "
       parameters:
       - default: false
         in: query
@@ -10836,18 +11032,41 @@ paths:
       tags:
       - RgwUserAccounts
     post:
+      description: "\n        Create an account\n\n        :param account_name: Account\
+        \ name\n        :return: Returns account resource.\n        :rtype: Dict[str,\
+        \ Any]\n        "
       parameters: []
       requestBody:
         content:
           application/json:
             schema:
               properties:
-                account_id:
-                  type: integer
                 account_name:
-                  type: integer
-                email:
+                  description: Account name
                   type: string
+                email:
+                  description: Email
+                  type: string
+                max_access_keys:
+                  description: Max access keys
+                  type: integer
+                max_buckets:
+                  description: Max buckets
+                  type: integer
+                max_group:
+                  description: Max groups
+                  type: integer
+                max_roles:
+                  description: Max roles
+                  type: integer
+                max_users:
+                  description: Max users
+                  type: integer
+                tenant:
+                  description: Tenant
+                  type: string
+              required:
+              - account_name
               type: object
       responses:
         '201':
@@ -10871,10 +11090,13 @@ paths:
             trace.
       security:
       - jwt: []
+      summary: Update RGW account info
       tags:
       - RgwUserAccounts
   /api/rgw/accounts/{account_id}:
     delete:
+      description: "\n        Removes an account\n\n        :param account_id: account\
+        \ identifier\n        :return: None.\n        "
       parameters:
       - description: Account id
         in: path
@@ -10908,6 +11130,7 @@ paths:
       tags:
       - RgwUserAccounts
     get:
+      description: "\n        Get an account by account id\n        "
       parameters:
       - description: Account id
         in: path
@@ -10936,6 +11159,9 @@ paths:
       tags:
       - RgwUserAccounts
     put:
+      description: "\n        Modifies an account\n\n        :param account_id: Account\
+        \ identifier\n        :return: Returns modified account resource.\n      \
+        \  :rtype: Dict[str, Any]\n        "
       parameters:
       - description: Account id
         in: path
@@ -10949,9 +11175,31 @@ paths:
             schema:
               properties:
                 account_name:
-                  type: integer
-                email:
+                  description: Account name
                   type: string
+                email:
+                  description: Email
+                  type: string
+                max_access_keys:
+                  description: Max access keys
+                  type: integer
+                max_buckets:
+                  description: Max buckets
+                  type: integer
+                max_group:
+                  description: Max groups
+                  type: integer
+                max_roles:
+                  description: Max roles
+                  type: integer
+                max_users:
+                  description: Max users
+                  type: integer
+                tenant:
+                  description: Tenant
+                  type: string
+              required:
+              - account_name
               type: object
       responses:
         '200':
@@ -10980,6 +11228,9 @@ paths:
       - RgwUserAccounts
   /api/rgw/accounts/{account_id}/quota:
     put:
+      description: "\n        Modifies quota\n\n        :param account_id: Account\
+        \ identifier\n        :param quota_type: 'account' or 'bucket'\n        :return:\
+        \ Returns modified quota.\n        :rtype: Dict[str, Any]\n        "
       parameters:
       - description: Account id
         in: path
@@ -10992,17 +11243,22 @@ paths:
           application/json:
             schema:
               properties:
+                enabled:
+                  type: string
                 max_objects:
+                  description: Max objects
                   type: string
                 max_size:
                   description: Max size
                   type: string
                 quota_type:
+                  description: Quota type
                   type: string
               required:
               - quota_type
               - max_size
               - max_objects
+              - enabled
               type: object
       responses:
         '200':
@@ -11031,6 +11287,10 @@ paths:
       - RgwUserAccounts
   /api/rgw/accounts/{account_id}/quota/status:
     put:
+      description: "\n        Enable/Disable quota\n\n        :param account_id: Account\
+        \ identifier\n        :param quota_type: 'account' or 'bucket'\n        :param\
+        \ quota_status: 'enable' or 'disable'\n        :return: Returns modified quota.\n\
+        \        :rtype: Dict[str, Any]\n        "
       parameters:
       - description: Account id
         in: path
@@ -11044,8 +11304,10 @@ paths:
             schema:
               properties:
                 quota_status:
+                  description: Quota status
                   type: string
                 quota_type:
+                  description: Quota type
                   type: string
               required:
               - quota_type
@@ -13292,6 +13554,11 @@ paths:
         name: zoneName
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: realmName
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -14599,6 +14866,43 @@ paths:
       tags:
       - SMB
   /api/smb/cluster/{cluster_id}:
+    delete:
+      description: "\n        Remove an smb cluster\n\n        :param cluster_id:\
+        \ Cluster identifier\n        :return: None.\n        "
+      parameters:
+      - description: Unique identifier for the cluster
+        in: path
+        name: cluster_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '204':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              schema:
+                properties: {}
+                type: object
+          description: Resource deleted.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Remove an smb cluster
+      tags:
+      - SMB
     get:
       description: "\n        Get an smb cluster by cluster id\n        "
       parameters:
@@ -14706,6 +15010,74 @@ paths:
       security:
       - jwt: []
       summary: Get an smb cluster
+      tags:
+      - SMB
+  /api/smb/joinauth:
+    get:
+      description: "\n        List all smb join auth resources\n\n        :return:\
+        \ Returns list of join auth.\n        :rtype: List[Dict]\n        "
+      parameters:
+      - default: ''
+        in: query
+        name: join_auth
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              schema:
+                items:
+                  properties:
+                    auth:
+                      description: Authentication credentials
+                      properties:
+                        password:
+                          description: Password for authentication
+                          type: string
+                        username:
+                          description: Username for authentication
+                          type: string
+                      required:
+                      - username
+                      - password
+                      type: object
+                    auth_id:
+                      description: Unique identifier for the join auth resource
+                      type: string
+                    intent:
+                      description: Desired state of the resource, e.g., 'present'
+                        or 'removed'
+                      type: string
+                    linked_to_cluster:
+                      description: Optional string containing a cluster ID.     If
+                        set, the resource is linked to the cluster and will be automatically
+                        removed     when the cluster is removed
+                      type: string
+                    resource_type:
+                      description: ceph.smb.join.auth
+                      type: string
+                  type: object
+                required:
+                - resource_type
+                - auth_id
+                - intent
+                - auth
+                - linked_to_cluster
+                type: array
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: List smb join authorization resources
       tags:
       - SMB
   /api/smb/share:
@@ -14832,7 +15204,96 @@ paths:
             trace.
       security:
       - jwt: []
-      summary: Remove smb shares
+      summary: Remove an smb share
+      tags:
+      - SMB
+  /api/smb/usersgroups:
+    get:
+      description: "\n        List all smb usersgroups resources\n\n        :return:\
+        \ Returns list of usersgroups.\n        :rtype: List[Dict]\n        "
+      parameters:
+      - default: ''
+        in: query
+        name: users_groups
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              schema:
+                items:
+                  properties:
+                    intent:
+                      description: Desired state of the resource, e.g., 'present'
+                        or 'removed'
+                      type: string
+                    linked_to_cluster:
+                      description: Optional string containing a cluster ID.     If
+                        set, the resource is linked to the cluster and will be automatically
+                        removed     when the cluster is removed
+                      type: string
+                    resource_type:
+                      description: ceph.smb.usersgroups
+                      type: string
+                    users_groups_id:
+                      description: A short string identifying the usersgroups resource
+                      type: string
+                    values:
+                      description: Required object containing users and groups information
+                      properties:
+                        groups:
+                          description: List of group objects, each containing a name
+                          items:
+                            properties:
+                              name:
+                                description: The name of the group
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        users:
+                          description: List of user objects, each containing a name
+                            and password
+                          items:
+                            properties:
+                              name:
+                                description: The user name
+                                type: string
+                              password:
+                                description: The password for the user
+                                type: string
+                            required:
+                            - name
+                            - password
+                            type: object
+                          type: array
+                      required:
+                      - users
+                      - groups
+                      type: object
+                  type: object
+                required:
+                - resource_type
+                - users_groups_id
+                - intent
+                - values
+                - linked_to_cluster
+                type: array
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: List smb user resources
       tags:
       - SMB
   /api/summary:
@@ -16192,6 +16653,8 @@ tags:
   name: NFS-Ganesha
 - description: NVMe-oF Gateway Management API
   name: NVMe-oF Gateway
+- description: NVMe-oF SPDK Management API
+  name: NVMe-oF SPDK
 - description: NVMe-oF Subsystem Management API
   name: NVMe-oF Subsystem
 - description: NVMe-oF Subsystem Connection Management API

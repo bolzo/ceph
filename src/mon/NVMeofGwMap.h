@@ -96,9 +96,6 @@ private:
   void fsm_handle_to_expired(
     const NvmeGwId &gw_id, const NvmeGroupKey& group_key,
     NvmeAnaGrpId grpid,  bool &map_modified);
-  void fsm_handle_gw_fast_reboot(const NvmeGwId &gw_id,
-      const NvmeGroupKey& group_key, NvmeAnaGrpId grpid,
-      bool &map_modified);
   void find_failover_candidate(
     const NvmeGwId &gw_id, const NvmeGroupKey& group_key,
     NvmeAnaGrpId grpid, bool &propose_pending);
@@ -144,7 +141,7 @@ public:
     DECODE_FINISH(bl);
   }
 
-  void get_health_checks(health_check_map_t *checks) const;
+  void get_health_checks(health_check_map_t *checks);
 };
 
 #include "NVMeofGwSerialize.h"

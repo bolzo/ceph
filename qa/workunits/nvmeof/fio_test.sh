@@ -34,7 +34,7 @@ done
 
 fio_file=$(mktemp -t nvmeof-fio-XXXX)
 all_drives_list=$(sudo nvme list --output-format=json | 
-    jq -r '.Devices | sort_by(.NameSpace) | .[] | select(.ModelNumber == "Ceph bdev Controller") | .DevicePath')
+    jq -r '.Devices[].Subsystems[] | select(.Controllers | all(.ModelNumber == "Ceph bdev Controller")) | .Namespaces | sort_by(.NSID) | .[] | .NameSpace')
 
 # When the script is passed --start_ns and --end_ns (example: `nvmeof_fio_test.sh --start_ns 1 --end_ns 3`), 
 # then fio runs on namespaces only in the defined range (which is 1 to 3 here). 
@@ -50,7 +50,8 @@ fi
 
 
 RUNTIME=${RUNTIME:-600}
-
+filename=$(echo "$selected_drives" | sed -z 's/\n/:\/dev\//g' | sed 's/:\/dev\/$//')
+filename="/dev/$filename"
 
 cat >> $fio_file <<EOF
 [nvmeof-fio-test]
@@ -61,7 +62,7 @@ size=${SIZE:-1G}
 time_based=1
 runtime=$RUNTIME
 rw=${RW:-randrw}
-filename=$(echo "$selected_drives" | tr '\n' ':' | sed 's/:$//')
+filename=${filename}
 verify=md5
 verify_fatal=1
 direct=1
@@ -79,6 +80,5 @@ if [ "$rbd_iostat" = true  ]; then
 fi
 fio --showcmd $fio_file
 sudo fio $fio_file 
-wait
 
 echo "[nvmeof.fio] fio test successful!"

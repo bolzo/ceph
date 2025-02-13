@@ -110,7 +110,7 @@ general form of the command above:
 
    "3.64 TB"
 
-This means that the exact device size is 3.64 * 1000, or 3640GB.
+This means that the exact device size is 3.64 TB, or 3640GB.
 
 This procedure was developed by Frédéric Nass. See `this thread on the
 [ceph-users] mailing list
@@ -197,6 +197,18 @@ There are a few ways to create new OSDs:
     ceph orch apply -i spec.yml
 
 .. warning:: When deploying new OSDs with ``cephadm``, ensure that the ``ceph-osd`` package is not already installed on the target host. If it is installed, conflicts may arise in the management and control of the OSD that may lead to errors or unexpected behavior.
+
+* OSDs created via ``ceph orch daemon add`` are by default not added to the orchestrator's OSD service, they get added to 'osd' service. To attach an OSD to a different, existing OSD service, issue a command of the following form:
+
+  .. prompt:: bash *
+
+    ceph orch osd set-spec-affinity <service_name> <osd_id(s)>
+
+  For example:
+
+  .. prompt:: bash #
+
+    ceph orch osd set-spec-affinity osd.default_drive_group 0 1
 
 Dry Run
 -------
@@ -299,10 +311,11 @@ OSDs that are not safe to destroy will be rejected.
     specs see :ref:`drivegroups`. For more info on the declarative nature of
     cephadm in reference to deploying OSDs, see :ref:`cephadm-osd-declarative`
 
-Monitoring OSD State
---------------------
+Monitoring OSD State During OSD Removal
+---------------------------------------
 
-You can query the state of OSD operation with the following command:
+You can query the state of OSD operations during the process of removing OSDS
+by running the following command:
 
 .. prompt:: bash #
 
@@ -1044,15 +1057,101 @@ using the `paths` keyword with the following syntax:
 Activate existing OSDs
 ======================
 
-In case the OS of a host was reinstalled, existing OSDs need to be activated
-again. For this use case, cephadm provides a wrapper for :ref:`ceph-volume-lvm-activate` that
-activates all existing OSDs on a host.
+If the operating system of a host has been reinstalled, the existing OSDs
+associated with it must be activated again. ``cephadm`` provides a wrapper for
+:ref:`ceph-volume-lvm-activate` that activates all existing OSDs on a host.
 
-.. prompt:: bash #
+The following procedure explains how to use ``cephadm`` to activate OSDs on a
+host that has recently had its operating system reinstalled.
 
-  ceph cephadm osd activate <host>...
 
-This will scan all existing disks for OSDs and deploy corresponding daemons.
+This procedure assumes the existence of two hosts: ``ceph01`` and ``ceph04``.
+
+- ``ceph01`` is a host equipped with an admin keyring. 
+- ``ceph04`` is the host with the recently reinstalled operating system.
+
+#. Install ``cephadm`` and ``podman`` on the host. The command for installing
+   these utilities will depend upon the operating system of the host.
+
+#. Retrieve the public key.
+
+   .. prompt:: bash ceph01#
+      
+      ceph cephadm get-pub-key > ceph.pub
+
+#. Copy the key (from ``ceph01``) to the freshly reinstalled host (``ceph04``):
+
+   .. prompt:: bash ceph01#
+
+      ssh-copy-id -f -i ceph.pub root@<hostname>
+
+#. Retrieve the private key in order to test the connection:
+
+   .. prompt:: bash ceph01#
+
+      ceph config-key get mgr/cephadm/ssh_identity_key > ceph-private.key
+
+#. From ``ceph01``, Modify the permissions of ``ceph-private.key``:
+
+   .. prompt:: bash ceph01#
+
+      chmod 400 ceph-private.key
+
+#. Log in to ``ceph04`` from ``ceph01`` to test the connection and
+   configuration:
+
+   .. prompt:: bash ceph01#
+
+      ssh -i ceph-private.key ceph04
+
+#. While logged into ``ceph01``, remove ``ceph.pub`` and ``ceph-private.key``:
+
+   .. prompt:: bash ceph01#
+
+      rm ceph.pub ceph-private.key
+
+#. If you run your own container registry, instruct the orchestrator to log in
+   to each host in it: 
+
+   .. prompt:: bash #
+
+      ceph cephadm registry-login my-registry.domain <user> <password>
+
+   When the orchestrator performs the registry login, it will attempt to deploy
+   any missing daemons to the host. This includes ``crash``, ``node-exporter``,
+   and any other daemons that the host ran before its operating system was
+   reinstalled.
+
+   To be a bit clearer, ``cephadm`` attempts to deploy missing daemons to all
+   hosts that have been put under management by cephadm when ``cephadm``
+   determines that the hosts are online. In this context, "online" means
+   "present in the output of the ``ceph orch host ls`` command and possessing a
+   status that is not ``offline`` or ``maintenance``. If it is necessary to log
+   in to the registry in order to pull the images for the missing daemons, then
+   the deployment of the missing daemons will fail until the process of logging
+   in to the registry has been completed.
+
+   .. note:: This step is not necessary if you do not run your own container
+             registry. If your host is still in the "host list", which can be
+             retrieved by running the command ``ceph orch host ls``, you do not
+             need to run this command.
+
+#. Activate the OSDs on the host that has recently had its operating system
+   reinstalled:
+
+   .. prompt:: bash #
+
+      ceph cephadm osd activate ceph04
+
+   This command causes ``cephadm`` to scan all existing disks for OSDs. This
+   command will make ``cephadm`` deploy any missing daemons to the host
+   specified. 
+  
+
+
+*This procedure was developed by Eugen Block in Feburary of 2025, and a blog
+post pertinent to its development can be seen here:*
+`Eugen Block's "Cephadm: Activate existing OSDs" blog post <https://heiterbiswolkig.blogs.nde.ag/2025/02/06/cephadm-activate-existing-osds/>`_.
 
 Further Reading
 ===============

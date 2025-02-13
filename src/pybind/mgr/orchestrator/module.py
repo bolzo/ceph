@@ -21,7 +21,7 @@ from ceph.deployment.service_spec import PlacementSpec, ServiceSpec, service_spe
 from ceph.deployment.hostspec import SpecValidationError
 from ceph.deployment.utils import unwrap_ipv6
 from ceph.utils import datetime_now
-
+from ceph.cephadm.images import NonCephImageServiceTypes
 from mgr_util import to_pretty_timedelta, format_bytes
 from mgr_module import MgrModule, HandleCommandResult, Option
 from object_format import Format
@@ -1472,6 +1472,14 @@ Usage:
 
         return HandleCommandResult(stdout=out)
 
+    @_cli_write_command('orch osd set-spec-affinity')
+    def _osd_set_spec(self, service_name: str, osd_id: List[str]) -> HandleCommandResult:
+        """Set service spec affinity for osd"""
+        completion = self.set_osd_spec(service_name, osd_id)
+        res = raise_if_exception(completion)
+
+        return HandleCommandResult(stdout=res)
+
     @_cli_write_command('orch daemon add')
     def daemon_add_misc(self,
                         daemon_type: Optional[ServiceType] = None,
@@ -1666,7 +1674,13 @@ Usage:
             specs: List[Union[ServiceSpec, HostSpec]] = []
             # YAML '---' document separator with no content generates
             # None entries in the output. Let's skip them silently.
-            content = [o for o in yaml_objs if o is not None]
+            try:
+                content = [o for o in yaml_objs if o is not None]
+            except yaml.scanner.ScannerError as e:
+                msg = f"Invalid YAML received : {str(e)}"
+                self.log.exception(msg)
+                return HandleCommandResult(-errno.EINVAL, stderr=msg)
+
             for s in content:
                 try:
                     spec = json_to_generic_spec(s)
@@ -2191,7 +2205,13 @@ Usage:
             specs: List[TunedProfileSpec] = []
             # YAML '---' document separator with no content generates
             # None entries in the output. Let's skip them silently.
-            content = [o for o in yaml_objs if o is not None]
+            try:
+                content = [o for o in yaml_objs if o is not None]
+            except yaml.scanner.ScannerError as e:
+                msg = f"Invalid YAML received : {str(e)}"
+                self.log.exception(msg)
+                return HandleCommandResult(-errno.EINVAL, stderr=msg)
+
             for spec in content:
                 specs.append(TunedProfileSpec.from_json(spec))
         else:
@@ -2361,7 +2381,9 @@ Usage:
             'is_paused': status.is_paused,
         }
         out = json.dumps(r, indent=4)
-        return HandleCommandResult(stdout=out)
+        if r.get('in_progress'):
+            return HandleCommandResult(stdout=out)
+        return HandleCommandResult(stdout="There are no upgrades in progress currently.")
 
     @_cli_write_command('orch upgrade start')
     def _upgrade_start(self,
@@ -2398,5 +2420,12 @@ Usage:
     def _upgrade_stop(self) -> HandleCommandResult:
         """Stop an in-progress upgrade"""
         completion = self.upgrade_stop()
+        raise_if_exception(completion)
+        return HandleCommandResult(stdout=completion.result_str())
+
+    @_cli_write_command('orch update service')
+    def _update_service(self, service_type: NonCephImageServiceTypes, image: str) -> HandleCommandResult:
+        """Update image for non-ceph image daemon"""
+        completion = self.update_service(service_type.value, service_type.name, image)
         raise_if_exception(completion)
         return HandleCommandResult(stdout=completion.result_str())

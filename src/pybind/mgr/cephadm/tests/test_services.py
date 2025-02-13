@@ -9,14 +9,11 @@ import pytest
 from unittest.mock import Mock, MagicMock, call, patch, ANY
 
 from cephadm.serve import CephadmServe
-from cephadm.services.cephadmservice import MonService, MgrService, MdsService, RgwService, \
-    RbdMirrorService, CrashService, CephadmDaemonDeploySpec
+from cephadm.services.service_registry import service_registry
+from cephadm.services.cephadmservice import MonService, CephadmDaemonDeploySpec
 from cephadm.services.iscsi import IscsiService
-from cephadm.services.nfs import NFSService
 from cephadm.services.nvmeof import NvmeofService
-from cephadm.services.osd import OSDService
-from cephadm.services.monitoring import GrafanaService, AlertmanagerService, PrometheusService, \
-    NodeExporterService, LokiService, PromtailService
+from cephadm.services.monitoring import GrafanaService, AlertmanagerService, PrometheusService
 from cephadm.services.smb import SMBSpec
 from cephadm.module import CephadmOrchestrator
 from ceph.deployment.service_spec import (
@@ -108,84 +105,46 @@ class TestCephadmService:
         service._set_value_on_dashboard('svc', 'get-cmd', 'set-cmd', service_url)
         mgr.check_mon_command.assert_called_once_with({'prefix': 'get-cmd'})
 
-    def _get_services(self, mgr):
-        # services:
-        osd_service = OSDService(mgr)
-        nfs_service = NFSService(mgr)
-        mon_service = MonService(mgr)
-        mgr_service = MgrService(mgr)
-        mds_service = MdsService(mgr)
-        rgw_service = RgwService(mgr)
-        rbd_mirror_service = RbdMirrorService(mgr)
-        grafana_service = GrafanaService(mgr)
-        alertmanager_service = AlertmanagerService(mgr)
-        prometheus_service = PrometheusService(mgr)
-        node_exporter_service = NodeExporterService(mgr)
-        loki_service = LokiService(mgr)
-        promtail_service = PromtailService(mgr)
-        crash_service = CrashService(mgr)
-        iscsi_service = IscsiService(mgr)
-        nvmeof_service = NvmeofService(mgr)
-        cephadm_services = {
-            'mon': mon_service,
-            'mgr': mgr_service,
-            'osd': osd_service,
-            'mds': mds_service,
-            'rgw': rgw_service,
-            'rbd-mirror': rbd_mirror_service,
-            'nfs': nfs_service,
-            'grafana': grafana_service,
-            'alertmanager': alertmanager_service,
-            'prometheus': prometheus_service,
-            'node-exporter': node_exporter_service,
-            'loki': loki_service,
-            'promtail': promtail_service,
-            'crash': crash_service,
-            'iscsi': iscsi_service,
-            'nvmeof': nvmeof_service,
-        }
-        return cephadm_services
-
     def test_get_auth_entity(self):
         mgr = FakeMgr()
-        cephadm_services = self._get_services(mgr)
+        service_registry.init_services(mgr)
 
         for daemon_type in ['rgw', 'rbd-mirror', 'nfs', "iscsi"]:
             assert "client.%s.id1" % (daemon_type) == \
-                cephadm_services[daemon_type].get_auth_entity("id1", "host")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "host")
             assert "client.%s.id1" % (daemon_type) == \
-                cephadm_services[daemon_type].get_auth_entity("id1", "")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "")
             assert "client.%s.id1" % (daemon_type) == \
-                cephadm_services[daemon_type].get_auth_entity("id1")
+                service_registry.get_service(daemon_type).get_auth_entity("id1")
 
         assert "client.crash.host" == \
-            cephadm_services["crash"].get_auth_entity("id1", "host")
+            service_registry.get_service('crash').get_auth_entity("id1", "host")
         with pytest.raises(OrchestratorError):
-            cephadm_services["crash"].get_auth_entity("id1", "")
-            cephadm_services["crash"].get_auth_entity("id1")
+            service_registry.get_service('crash').get_auth_entity("id1", "")
+            service_registry.get_service('crash').get_auth_entity("id1")
 
-        assert "mon." == cephadm_services["mon"].get_auth_entity("id1", "host")
-        assert "mon." == cephadm_services["mon"].get_auth_entity("id1", "")
-        assert "mon." == cephadm_services["mon"].get_auth_entity("id1")
+        assert "mon." == service_registry.get_service('mon').get_auth_entity("id1", "host")
+        assert "mon." == service_registry.get_service('mon').get_auth_entity("id1", "")
+        assert "mon." == service_registry.get_service('mon').get_auth_entity("id1")
 
-        assert "mgr.id1" == cephadm_services["mgr"].get_auth_entity("id1", "host")
-        assert "mgr.id1" == cephadm_services["mgr"].get_auth_entity("id1", "")
-        assert "mgr.id1" == cephadm_services["mgr"].get_auth_entity("id1")
+        assert "mgr.id1" == service_registry.get_service('mgr').get_auth_entity("id1", "host")
+        assert "mgr.id1" == service_registry.get_service('mgr').get_auth_entity("id1", "")
+        assert "mgr.id1" == service_registry.get_service('mgr').get_auth_entity("id1")
 
         for daemon_type in ["osd", "mds"]:
             assert "%s.id1" % daemon_type == \
-                cephadm_services[daemon_type].get_auth_entity("id1", "host")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "host")
             assert "%s.id1" % daemon_type == \
-                cephadm_services[daemon_type].get_auth_entity("id1", "")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "")
             assert "%s.id1" % daemon_type == \
-                cephadm_services[daemon_type].get_auth_entity("id1")
+                service_registry.get_service(daemon_type).get_auth_entity("id1")
 
         # services based on CephadmService shouldn't have get_auth_entity
         with pytest.raises(AttributeError):
             for daemon_type in ['grafana', 'alertmanager', 'prometheus', 'node-exporter', 'loki', 'promtail']:
-                cephadm_services[daemon_type].get_auth_entity("id1", "host")
-                cephadm_services[daemon_type].get_auth_entity("id1", "")
-                cephadm_services[daemon_type].get_auth_entity("id1")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "host")
+                service_registry.get_service(daemon_type).get_auth_entity("id1", "")
+                service_registry.get_service(daemon_type).get_auth_entity("id1")
 
 
 class TestISCSIService:
@@ -284,7 +243,7 @@ class TestISCSIService:
 
     @patch("cephadm.serve.CephadmServe._run_cephadm")
     @patch("cephadm.module.CephadmOrchestrator.get_unique_name")
-    @patch("cephadm.services.iscsi.IscsiService.get_trusted_ips")
+    @patch("cephadm.services.iscsi.get_trusted_ips")
     def test_iscsi_config(self, _get_trusted_ips, _get_name, _run_cephadm, cephadm_module: CephadmOrchestrator):
 
         iscsi_daemon_id = 'testpool.test.qwert'
@@ -398,7 +357,6 @@ enable_auth = False
 state_update_notify = True
 state_update_interval_sec = 5
 enable_spdk_discovery_controller = False
-enable_key_encryption = True
 encryption_key = /encryption.key
 rebalance_period_sec = 7
 max_gws_in_grp = 16
@@ -409,6 +367,7 @@ prometheus_port = 10008
 prometheus_stats_interval = 10
 verify_nqns = True
 verify_keys = True
+verify_listener_ip = True
 omap_file_lock_duration = 20
 omap_file_lock_retries = 30
 omap_file_lock_retry_sleep_interval = 1.0
@@ -420,9 +379,10 @@ enable_monitor_client = True
 max_hosts_per_namespace = 8
 max_namespaces_with_netmask = 1000
 max_subsystems = 128
+max_hosts = 2048
 max_namespaces = 1024
 max_namespaces_per_subsystem = 256
-max_hosts_per_subsystem = 32
+max_hosts_per_subsystem = 128
 
 [gateway-logs]
 log_level = INFO
@@ -481,11 +441,11 @@ timeout = 1.0\n"""
                         "image": "",
                         "deploy_arguments": [],
                         "params": {
-                            "tcp_ports": [5500, 4420, 8009]
+                            "tcp_ports": [5500, 4420, 8009, 10008]
                         },
                         "meta": {
                             "service_name": "nvmeof.testpool",
-                            "ports": [5500, 4420, 8009],
+                            "ports": [5500, 4420, 8009, 10008],
                             "ip": None,
                             "deployed_by": [],
                             "rank": None,
@@ -581,7 +541,14 @@ class TestMonitoring:
         mock_getfqdn.return_value = purl.hostname
 
         with with_host(cephadm_module, "test"):
-            with with_service(cephadm_module, AlertManagerSpec()):
+            cephadm_module.cache.update_host_networks('test', {
+                '1.2.3.0/24': {
+                    'if0': ['1.2.3.1']
+                },
+            })
+            with with_service(cephadm_module, AlertManagerSpec('alertmanager',
+                                                               networks=['1.2.3.0/24'],
+                                                               only_bind_port_on_networks=True)):
                 y = dedent(self._get_config(expected_yaml_url)).lstrip()
                 _run_cephadm.assert_called_with(
                     'test',
@@ -595,11 +562,12 @@ class TestMonitoring:
                         "deploy_arguments": [],
                         "params": {
                             'tcp_ports': [9093, 9094],
+                            'port_ips': {"9094": "1.2.3.1"},
                         },
                         "meta": {
                             'service_name': 'alertmanager',
                             'ports': [9093, 9094],
-                            'ip': None,
+                            'ip': '1.2.3.1',
                             'deployed_by': [],
                             'rank': None,
                             'rank_generation': None,
@@ -612,6 +580,7 @@ class TestMonitoring:
                             },
                             "peers": [],
                             "use_url_prefix": False,
+                            "ip_to_bind_to": "1.2.3.1",
                         }
                     }),
                     error_ok=True,
@@ -634,8 +603,16 @@ class TestMonitoring:
             cephadm_module.secure_monitoring_stack = True
             cephadm_module.set_store(AlertmanagerService.USER_CFG_KEY, 'alertmanager_user')
             cephadm_module.set_store(AlertmanagerService.PASS_CFG_KEY, 'alertmanager_plain_password')
+
+            cephadm_module.cache.update_host_networks('test', {
+                'fd12:3456:789a::/64': {
+                    'if0': ['fd12:3456:789a::10']
+                },
+            })
             with with_service(cephadm_module, MgmtGatewaySpec("mgmt-gateway")) as _, \
-                 with_service(cephadm_module, AlertManagerSpec()):
+                 with_service(cephadm_module, AlertManagerSpec('alertmanager',
+                                                               networks=['fd12:3456:789a::/64'],
+                                                               only_bind_port_on_networks=True)):
 
                 y = dedent("""
                 # This file is generated by cephadm.
@@ -646,6 +623,8 @@ class TestMonitoring:
                   http_config:
                     tls_config:
                       ca_file: root_cert.pem
+                      cert_file: alertmanager.crt
+                      key_file: alertmanager.key
 
                 route:
                   receiver: 'default'
@@ -686,11 +665,12 @@ class TestMonitoring:
                         "deploy_arguments": [],
                         "params": {
                             'tcp_ports': [9093, 9094],
+                            'port_ips': {"9094": "fd12:3456:789a::10"}
                         },
                         "meta": {
                             'service_name': 'alertmanager',
                             'ports': [9093, 9094],
-                            'ip': None,
+                            'ip': 'fd12:3456:789a::10',
                             'deployed_by': [],
                             'rank': None,
                             'rank_generation': None,
@@ -708,6 +688,7 @@ class TestMonitoring:
                             'peers': [],
                             'web_config': '/etc/alertmanager/web.yml',
                             "use_url_prefix": True,
+                            "ip_to_bind_to": "fd12:3456:789a::10",
                         }
                     }),
                     error_ok=True,
@@ -741,6 +722,8 @@ class TestMonitoring:
                   http_config:
                     tls_config:
                       ca_file: root_cert.pem
+                      cert_file: alertmanager.crt
+                      key_file: alertmanager.key
 
                 route:
                   receiver: 'default'
@@ -801,6 +784,7 @@ class TestMonitoring:
                             'peers': [],
                             'web_config': '/etc/alertmanager/web.yml',
                             "use_url_prefix": False,
+                            "ip_to_bind_to": "",
                         }
                     }),
                     error_ok=True,
@@ -1170,6 +1154,8 @@ class TestMonitoring:
                             password: sd_password
                           tls_config:
                             ca_file: root_cert.pem
+                            cert_file: prometheus.crt
+                            key_file:  prometheus.key
 
                 scrape_configs:
                   - job_name: 'ceph'
@@ -1191,6 +1177,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'node'
                     relabel_configs:
@@ -1209,6 +1197,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'haproxy'
                     relabel_configs:
@@ -1225,6 +1215,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'ceph-exporter'
                     relabel_configs:
@@ -1242,6 +1234,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'nvmeof'
                     honor_labels: true
@@ -1255,6 +1249,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'nfs'
                     honor_labels: true
@@ -1268,6 +1264,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                   - job_name: 'smb'
                     honor_labels: true
@@ -1281,6 +1279,8 @@ class TestMonitoring:
                         password: sd_password
                       tls_config:
                         ca_file: root_cert.pem
+                        cert_file: prometheus.crt
+                        key_file:  prometheus.key
 
                 """).lstrip()
 
@@ -1865,7 +1865,7 @@ class TestMonitoring:
         with with_host(cephadm_module, 'test'):
             with with_service(cephadm_module, ServiceSpec('mgr')) as _, \
                     with_service(cephadm_module, GrafanaSpec(initial_admin_password='secure')):
-                out = cephadm_module.cephadm_services['grafana'].generate_config(
+                out = service_registry.get_service('grafana').generate_config(
                     CephadmDaemonDeploySpec('test', 'daemon', 'grafana'))
                 assert out == (
                     {
@@ -1931,7 +1931,7 @@ class TestMonitoring:
         with with_host(cephadm_module, 'test'):
             with with_service(cephadm_module, ServiceSpec('mgr')) as _, \
                     with_service(cephadm_module, GrafanaSpec(anonymous_access=False, initial_admin_password='secure')):
-                out = cephadm_module.cephadm_services['grafana'].generate_config(
+                out = service_registry.get_service('grafana').generate_config(
                     CephadmDaemonDeploySpec('test', 'daemon', 'grafana'))
                 assert out == (
                     {
@@ -2070,6 +2070,26 @@ class TestRGWService:
                     'key': 'rgw_frontends',
                 })
                 assert f == expected
+
+    @pytest.mark.parametrize(
+        "disable_sync_traffic",
+        [
+            (True),
+            (False),
+        ]
+    )
+    @patch("cephadm.serve.CephadmServe._run_cephadm", _run_cephadm('{}'))
+    def test_rgw_disable_sync_traffic(self, disable_sync_traffic, cephadm_module: CephadmOrchestrator):
+        with with_host(cephadm_module, 'host1'):
+            s = RGWSpec(service_id="foo",
+                        disable_multisite_sync_traffic=disable_sync_traffic)
+            with with_service(cephadm_module, s) as dds:
+                _, f, _ = cephadm_module.check_mon_command({
+                    'prefix': 'config get',
+                    'who': f'client.{dds[0]}',
+                    'key': 'rgw_run_sync_thread',
+                })
+                assert f == ('false' if disable_sync_traffic else 'true')
 
 
 class TestMonService:
@@ -2424,7 +2444,7 @@ class TestIngressService:
         ]
         _get_daemons_by_service.return_value = nfs_daemons
 
-        haproxy_generated_conf = cephadm_module.cephadm_services['ingress'].haproxy_generate_config(
+        haproxy_generated_conf = service_registry.get_service('ingress').haproxy_generate_config(
             CephadmDaemonDeploySpec(host='host1', daemon_id='ingress', service_name=ispec.service_name()))
 
         assert haproxy_generated_conf[0] == haproxy_expected_conf
@@ -2438,7 +2458,7 @@ class TestIngressService:
         ]
         _get_daemons_by_service.return_value = nfs_daemons
 
-        haproxy_generated_conf = cephadm_module.cephadm_services['ingress'].haproxy_generate_config(
+        haproxy_generated_conf = service_registry.get_service('ingress').haproxy_generate_config(
             CephadmDaemonDeploySpec(host='host1', daemon_id='ingress', service_name=ispec.service_name()))
 
         assert haproxy_generated_conf[0] == haproxy_expected_conf
@@ -2473,7 +2493,7 @@ class TestIngressService:
                                 virtual_ip="1.2.3.4/32")
             with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
                 # generate the keepalived conf based on the specified spec
-                keepalived_generated_conf = cephadm_module.cephadm_services['ingress'].keepalived_generate_config(
+                keepalived_generated_conf = service_registry.get_service('ingress').keepalived_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 keepalived_expected_conf = {
@@ -2517,7 +2537,7 @@ class TestIngressService:
                 assert keepalived_generated_conf[0] == keepalived_expected_conf
 
                 # generate the haproxy conf based on the specified spec
-                haproxy_generated_conf = cephadm_module.cephadm_services['ingress'].haproxy_generate_config(
+                haproxy_generated_conf = service_registry.get_service('ingress').haproxy_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 haproxy_expected_conf = {
@@ -2599,7 +2619,7 @@ class TestIngressService:
                                 virtual_ip="1.2.3.4/32")
             with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
                 # generate the keepalived conf based on the specified spec
-                keepalived_generated_conf = cephadm_module.cephadm_services['ingress'].keepalived_generate_config(
+                keepalived_generated_conf = service_registry.get_service('ingress').keepalived_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 keepalived_expected_conf = {
@@ -2643,7 +2663,7 @@ class TestIngressService:
                 assert keepalived_generated_conf[0] == keepalived_expected_conf
 
                 # generate the haproxy conf based on the specified spec
-                haproxy_generated_conf = cephadm_module.cephadm_services['ingress'].haproxy_generate_config(
+                haproxy_generated_conf = service_registry.get_service('ingress').haproxy_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 haproxy_expected_conf = {
@@ -2728,7 +2748,7 @@ class TestIngressService:
             with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
                 # generate the keepalived conf based on the specified spec
                 # Test with only 1 IP on the list, as it will fail with more VIPS but only one host.
-                keepalived_generated_conf = cephadm_module.cephadm_services['ingress'].keepalived_generate_config(
+                keepalived_generated_conf = service_registry.get_service('ingress').keepalived_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 keepalived_expected_conf = {
@@ -2772,7 +2792,7 @@ class TestIngressService:
                 assert keepalived_generated_conf[0] == keepalived_expected_conf
 
                 # generate the haproxy conf based on the specified spec
-                haproxy_generated_conf = cephadm_module.cephadm_services['ingress'].haproxy_generate_config(
+                haproxy_generated_conf = service_registry.get_service('ingress').haproxy_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 haproxy_expected_conf = {
@@ -2865,7 +2885,7 @@ class TestIngressService:
                                     keepalived_password='12345',
                                     virtual_ips_list=["1.2.3.100/24", "100.100.100.100/24"])
                 with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
-                    keepalived_generated_conf = cephadm_module.cephadm_services['ingress'].keepalived_generate_config(
+                    keepalived_generated_conf = service_registry.get_service('ingress').keepalived_generate_config(
                         CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                     keepalived_expected_conf = {
@@ -3017,7 +3037,7 @@ class TestIngressService:
                                 virtual_ip=f"{ip}/24")
             with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
                 # generate the haproxy conf based on the specified spec
-                haproxy_daemon_spec = cephadm_module.cephadm_services['ingress'].prepare_create(
+                haproxy_daemon_spec = service_registry.get_service('ingress').prepare_create(
                     CephadmDaemonDeploySpec(
                         host='test',
                         daemon_type='haproxy',
@@ -3055,12 +3075,12 @@ class TestIngressService:
                                 virtual_ip='1.2.3.0/24',
                                 keepalive_only=True)
             with with_service(cephadm_module, s) as _, with_service(cephadm_module, ispec) as _:
-                nfs_generated_conf, _ = cephadm_module.cephadm_services['nfs'].generate_config(
+                nfs_generated_conf, _ = service_registry.get_service('nfs').generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='foo.test.0.0', service_name=s.service_name()))
                 ganesha_conf = nfs_generated_conf['files']['ganesha.conf']
                 assert "Bind_addr = 1.2.3.0/24" in ganesha_conf
 
-                keepalived_generated_conf = cephadm_module.cephadm_services['ingress'].keepalived_generate_config(
+                keepalived_generated_conf = service_registry.get_service('ingress').keepalived_generate_config(
                     CephadmDaemonDeploySpec(host='test', daemon_id='ingress', service_name=ispec.service_name()))
 
                 keepalived_expected_conf = {
@@ -3226,12 +3246,14 @@ class TestIngressService:
             '        NFS_Port = 2049;\n'
             '        allow_set_io_flusher_fail = true;\n'
             '        HAProxy_Hosts = 192.168.122.111, 10.10.2.20, 192.168.122.222;\n'
+            '        Monitoring_Port = 9587;\n'
             '}\n'
             '\n'
             'NFSv4 {\n'
             '        Delegations = false;\n'
             "        RecoveryBackend = 'rados_cluster';\n"
             '        Minor_Versions = 1, 2;\n'
+            f'        Server_Scope = {cephadm_module._cluster_fsid}-foo\n'
             '        IdmapConf = "/etc/ganesha/idmap.conf";\n'
             '}\n'
             '\n'
@@ -3296,8 +3318,8 @@ class TestIngressService:
         ]
         _get_daemons_by_service.return_value = nfs_daemons
 
-        ingress_svc = cephadm_module.cephadm_services['ingress']
-        nfs_svc = cephadm_module.cephadm_services['nfs']
+        ingress_svc = service_registry.get_service('ingress')
+        nfs_svc = service_registry.get_service('nfs')
 
         # add host network info to one host to test the behavior of
         # adding all known-good addresses of the host to the list.
@@ -3360,9 +3382,7 @@ class TestJaeger:
     def test_jaeger_query(self, _run_cephadm, cephadm_module: CephadmOrchestrator):
         _run_cephadm.side_effect = async_side_effect(('{}', '', 0))
 
-        spec = TracingSpec(es_nodes="192.168.0.1:9200",
-                           service_type="jaeger-query")
-
+        spec = TracingSpec(es_nodes="192.168.0.1:9200", service_type="jaeger-query")
         config = {"elasticsearch_nodes": "http://192.168.0.1:9200"}
 
         with with_host(cephadm_module, 'test'):
@@ -3874,6 +3894,7 @@ class TestMgmtGateway:
                                          http {
 
                                              #access_log /dev/stdout;
+                                             error_log /dev/stderr info;
                                              client_header_buffer_size 32K;
                                              large_client_header_buffers 4 32k;
                                              proxy_busy_buffers_size 512k;
@@ -4121,6 +4142,7 @@ class TestMgmtGateway:
                                          http {
 
                                              #access_log /dev/stdout;
+                                             error_log /dev/stderr info;
                                              client_header_buffer_size 32K;
                                              large_client_header_buffers 4 32k;
                                              proxy_busy_buffers_size 512k;

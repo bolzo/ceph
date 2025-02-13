@@ -3,6 +3,7 @@
 
 import json
 import logging
+from functools import wraps
 from typing import List
 
 from smb.enums import Intent
@@ -15,7 +16,7 @@ from dashboard.exceptions import DashboardException
 
 from .. import mgr
 from ..security import Scope
-from . import APIDoc, APIRouter, ReadPermission, RESTController
+from . import APIDoc, APIRouter, Endpoint, ReadPermission, RESTController, UIRouter
 
 logger = logging.getLogger('controllers.smb')
 
@@ -87,6 +88,61 @@ SHARE_SCHEMA = {
     }, "Configuration for the CephFS share")
 }
 
+JOIN_AUTH_SCHEMA = {
+    "resource_type": (str, "ceph.smb.join.auth"),
+    "auth_id": (str, "Unique identifier for the join auth resource"),
+    "intent": (str, "Desired state of the resource, e.g., 'present' or 'removed'"),
+    "auth": ({
+        "username": (str, "Username for authentication"),
+        "password": (str, "Password for authentication")
+    }, "Authentication credentials"),
+    "linked_to_cluster": (str, "Optional string containing a cluster ID. \
+    If set, the resource is linked to the cluster and will be automatically removed \
+    when the cluster is removed")
+}
+
+LIST_JOIN_AUTH_SCHEMA = [JOIN_AUTH_SCHEMA]
+
+USERSGROUPS_SCHEMA = {
+    "resource_type": (str, "ceph.smb.usersgroups"),
+    "users_groups_id": (str, "A short string identifying the usersgroups resource"),
+    "intent": (str, "Desired state of the resource, e.g., 'present' or 'removed'"),
+    "values": ({
+        "users": ([{
+            "name": (str, "The user name"),
+            "password": (str, "The password for the user")
+        }], "List of user objects, each containing a name and password"),
+        "groups": ([{
+            "name": (str, "The name of the group")
+        }], "List of group objects, each containing a name")
+    }, "Required object containing users and groups information"),
+    "linked_to_cluster": (str, "Optional string containing a cluster ID. \
+    If set, the resource is linked to the cluster and will be automatically removed \
+    when the cluster is removed")
+}
+
+LIST_USERSGROUPS_SCHEMA = [USERSGROUPS_SCHEMA]
+
+
+def raise_on_failure(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+
+        if isinstance(result, dict) and result.get('success') is False:
+            msg = 'Operation failed'
+
+            # Extracts the result msg from either of two possible response structures:
+            if 'results' in result:
+                msg = result['results'][0].get('msg', msg)
+            elif 'msg' in result:
+                msg = result['msg']
+            raise DashboardException(msg=msg, component='smb')
+
+        return result
+
+    return wrapper
+
 
 @APIRouter('/smb/cluster', Scope.SMB)
 @APIDoc("SMB Cluster Management API", "SMB")
@@ -115,6 +171,7 @@ class SMBCluster(RESTController):
         """
         return mgr.remote('smb', 'show', [f'{self._resource}.{cluster_id}'])
 
+    @raise_on_failure
     @CreatePermission
     @EndpointDoc("Create smb cluster",
                  parameters={
@@ -136,6 +193,24 @@ class SMBCluster(RESTController):
                 json.dumps(cluster_resource)).to_simplified()
         except RuntimeError as e:
             raise DashboardException(e, component='smb')
+
+    @DeletePermission
+    @EndpointDoc("Remove an smb cluster",
+                 parameters={
+                     'cluster_id': (str, 'Unique identifier for the cluster')},
+                 responses={204: None})
+    def delete(self, cluster_id: str):
+        """
+        Remove an smb cluster
+
+        :param cluster_id: Cluster identifier
+        :return: None.
+        """
+        resource = {}
+        resource['resource_type'] = self._resource
+        resource['cluster_id'] = cluster_id
+        resource['intent'] = Intent.REMOVED
+        return mgr.remote('smb', 'apply_resources', json.dumps(resource)).one().to_simplified()
 
 
 @APIRouter('/smb/share', Scope.SMB)
@@ -161,10 +236,11 @@ class SMBShare(RESTController):
             'smb',
             'show',
             [f'{self._resource}.{cluster_id}' if cluster_id else self._resource])
-        return res['resources'] if 'resources' in res else res
+        return res['resources'] if 'resources' in res else [res]
 
+    @raise_on_failure
     @DeletePermission
-    @EndpointDoc("Remove smb shares",
+    @EndpointDoc("Remove an smb share",
                  parameters={
                      'cluster_id': (str, 'Unique identifier for the cluster'),
                      'share_id': (str, 'Unique identifier for the share')
@@ -184,3 +260,62 @@ class SMBShare(RESTController):
         resource['share_id'] = share_id
         resource['intent'] = Intent.REMOVED
         return mgr.remote('smb', 'apply_resources', json.dumps(resource)).one().to_simplified()
+
+
+@APIRouter('/smb/joinauth', Scope.SMB)
+@APIDoc("SMB Join Auth API", "SMB")
+class SMBJoinAuth(RESTController):
+    _resource: str = 'ceph.smb.join.auth'
+
+    @ReadPermission
+    @EndpointDoc("List smb join authorization resources",
+                 responses={200: LIST_JOIN_AUTH_SCHEMA})
+    def list(self, join_auth: str = '') -> List[Share]:
+        """
+        List all smb join auth resources
+
+        :return: Returns list of join auth.
+        :rtype: List[Dict]
+        """
+        res = mgr.remote(
+            'smb',
+            'show',
+            [f'{self._resource}.{join_auth}' if join_auth else self._resource])
+        return res['resources'] if 'resources' in res else [res]
+
+
+@APIRouter('/smb/usersgroups', Scope.SMB)
+@APIDoc("SMB Users Groups API", "SMB")
+class SMBUsersgroups(RESTController):
+    _resource: str = 'ceph.smb.usersgroups'
+
+    @ReadPermission
+    @EndpointDoc("List smb user resources",
+                 responses={200: LIST_USERSGROUPS_SCHEMA})
+    def list(self, users_groups: str = '') -> List[Share]:
+        """
+        List all smb usersgroups resources
+
+        :return: Returns list of usersgroups.
+        :rtype: List[Dict]
+        """
+        res = mgr.remote(
+            'smb',
+            'show',
+            [f'{self._resource}.{users_groups}' if users_groups else self._resource])
+        return res['resources'] if 'resources' in res else [res]
+
+
+@UIRouter('/smb')
+class SMBStatus(RESTController):
+    @EndpointDoc("Get SMB feature status")
+    @Endpoint()
+    @ReadPermission
+    def status(self):
+        status = {'available': False, 'message': None}
+        try:
+            mgr.remote('smb', 'show', ['ceph.smb.cluster'])
+            status['available'] = True
+        except (ImportError, RuntimeError):
+            status['message'] = 'SMB module is not enabled'
+        return status

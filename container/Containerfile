@@ -36,6 +36,7 @@ LABEL org.opencontainers.image.authors="Ceph Release Team <ceph-maintainers@ceph
       org.opencontainers.image.documentation="https://docs.ceph.com/"
 
 LABEL \
+ceph=True \
 FROM_IMAGE=${FROM_IMAGE} \
 CEPH_REF=${CEPH_REF} \
 CEPH_SHA1=${CEPH_SHA1} \
@@ -128,6 +129,7 @@ ceph-volume \
 cephfs-mirror \
 cephfs-top \
 kmod \
+libcephfs-daemon \
 libradosstriper1 \
 rbd-mirror" \
 >> packages.txt
@@ -212,6 +214,7 @@ RUN rpm -q $(cat packages.txt) && rm -f /var/lib/rpm/__db* && rm -f *packages.tx
 # Set some envs in the container for quickly inspecting details about the build at runtime
 ENV CEPH_IS_DEVEL="${CI_CONTAINER}" \
     CEPH_REF="${CEPH_REF}" \
+    CEPH_VERSION="${CEPH_REF}" \
     CEPH_OSD_FLAVOR="${OSD_FLAVOR}" \
     FROM_IMAGE="${FROM_IMAGE}"
 

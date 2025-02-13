@@ -403,6 +403,17 @@ public:
   virtual std::string canonical_name() const override { return fmt::format("REST.{}.ACL", s->info.method); }
 };
 
+class RGWGetObjAttrs_ObjStore : public RGWGetObjAttrs {
+public:
+  RGWGetObjAttrs_ObjStore() {}
+  ~RGWGetObjAttrs_ObjStore() override {}
+
+  int get_params(optional_yield y) = 0;
+  /* not actually used */
+  int send_response_data_error(optional_yield y) override { return 0; };
+  int send_response_data(bufferlist& bl, off_t ofs, off_t len) override { return 0; };
+};
+
 class RGWGetLC_ObjStore : public RGWGetLC {
 public:
   RGWGetLC_ObjStore() {}
@@ -903,6 +914,7 @@ extern void dump_range(req_state* s, uint64_t ofs, uint64_t end,
 extern void dump_continue(req_state *s);
 extern void list_all_buckets_end(req_state *s);
 extern void dump_time(req_state *s, const char *name, real_time t);
+extern void dump_time_exact_seconds(req_state *s, const char *name, real_time t);
 extern std::string dump_time_to_str(const real_time& t);
 extern void dump_bucket_from_state(req_state *s);
 extern void dump_redirect(req_state *s, const std::string& redirect);

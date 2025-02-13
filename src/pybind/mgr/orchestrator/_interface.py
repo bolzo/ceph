@@ -747,6 +747,10 @@ class Orchestrator(object):
         """
         raise NotImplementedError()
 
+    def set_osd_spec(self, service_name: str, osd_ids: List[str]) -> OrchResult:
+        """ set service of osd """
+        raise NotImplementedError()
+
     def blink_device_light(self, ident_fault: str, on: bool, locations: List['DeviceLightLoc']) -> OrchResult[List[str]]:
         """
         Instructs the orchestrator to enable or disable either the ident or the fault LED.
@@ -939,6 +943,9 @@ class Orchestrator(object):
 
         :return: UpgradeStatusSpec instance
         """
+        raise NotImplementedError()
+
+    def update_service(self, service_type: str, service_image: str, image: str) -> OrchResult:
         raise NotImplementedError()
 
     @_hide_in_features

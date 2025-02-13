@@ -12,14 +12,16 @@ from mgr_module import HandleCommandResult
 from mgr_module import NFS_POOL_NAME as POOL_NAME
 
 from ceph.deployment.service_spec import ServiceSpec, NFSServiceSpec
+from .service_registry import register_cephadm_service
 
-from orchestrator import DaemonDescription
+from orchestrator import DaemonDescription, OrchestratorError
 
 from cephadm.services.cephadmservice import AuthEntity, CephadmDaemonDeploySpec, CephService
 
 logger = logging.getLogger(__name__)
 
 
+@register_cephadm_service
 class NFSService(CephService):
     TYPE = 'nfs'
     DEFAULT_EXPORTER_PORT = 9587
@@ -95,11 +97,14 @@ class NFSService(CephService):
         # create the rados config object
         self.create_rados_config_obj(spec)
 
+        port = daemon_spec.ports[0] if daemon_spec.ports else 2049
+
         # create the RGW keyring
         rgw_user = f'{rados_user}-rgw'
         rgw_keyring = self.create_rgw_keyring(daemon_spec)
         if spec.virtual_ip:
             bind_addr = spec.virtual_ip
+            daemon_spec.port_ips = {str(port): spec.virtual_ip}
         else:
             bind_addr = daemon_spec.ip if daemon_spec.ip else ''
         if not bind_addr:
@@ -117,11 +122,13 @@ class NFSService(CephService):
                 "rgw_user": rgw_user,
                 "url": f'rados://{POOL_NAME}/{spec.service_id}/{spec.rados_config_name()}',
                 # fall back to default NFS port if not present in daemon_spec
-                "port": daemon_spec.ports[0] if daemon_spec.ports else 2049,
+                "port": port,
+                "monitoring_port": spec.monitoring_port if spec.monitoring_port else 9587,
                 "bind_addr": bind_addr,
                 "haproxy_hosts": [],
                 "nfs_idmap_conf": nfs_idmap_conf,
                 "enable_nlm": str(spec.enable_nlm).lower(),
+                "cluster_id": self.mgr._cluster_fsid,
             }
             if spec.enable_haproxy_protocol:
                 context["haproxy_hosts"] = self._haproxy_hosts()
@@ -317,12 +324,24 @@ class NFSService(CephService):
             '--namespace', cast(str, spec.service_id),
             'rm', 'grace',
         ]
-        subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=10
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10
+            )
+        except Exception as e:
+            err_msg = f'Got unexpected exception trying to remove ganesha grace file for nfs.{spec.service_id} service: {str(e)}'
+            self.mgr.log.warning(err_msg)
+            raise OrchestratorError(err_msg)
+        if result.returncode:
+            if "No such file" in result.stderr.decode('utf-8'):
+                logger.info(f'Grace file for nfs.{spec.service_id} already deleted')
+            else:
+                err_msg = f'Failed to remove ganesha grace file for nfs.{spec.service_id} service: {result.stderr.decode("utf-8")}'
+                self.mgr.log.warning(err_msg)
+                raise OrchestratorError(err_msg)
 
     def _haproxy_hosts(self) -> List[str]:
         # NB: Ideally, we would limit the list to IPs on hosts running

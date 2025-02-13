@@ -879,6 +879,17 @@ void PG::enqueue_push_for_backfill(
   backfill_state->enqueue_standalone_push(obj, v, peers);
 }
 
+void PG::enqueue_delete_for_backfill(
+  const hobject_t &obj,
+  const eversion_t &v,
+  const std::vector<pg_shard_t> &peers)
+{
+  assert(recovery_handler);
+  assert(recovery_handler->backfill_state);
+  auto backfill_state = recovery_handler->backfill_state.get();
+  backfill_state->enqueue_standalone_delete(obj, v, peers);
+}
+
 PG::interruptible_future<
   std::tuple<PG::interruptible_future<>,
              PG::interruptible_future<>>>
@@ -956,12 +967,12 @@ PG::BackgroundProcessLock::lock() noexcept
 }
 
 // We may need to rollback the ObjectContext on failed op execution.
-// Copy the current obc before mutating it in order to recover on failures.
-ObjectContextRef duplicate_obc(const ObjectContextRef &obc) {
-  ObjectContextRef object_context = new ObjectContext(obc->obs.oi.soid);
-  object_context->obs = obc->obs;
-  object_context->ssc = new SnapSetContext(*obc->ssc);
-  return object_context;
+// Copy the current obc data before mutating it in order to recover on failures.
+std::pair<ObjectState, SnapSetContextRef>
+duplicate_obc_data(const ObjectContextRef &obc) {
+  ObjectState os = obc->obs;
+  SnapSetContextRef ssc = new SnapSetContext(*obc->ssc);
+  return {os, ssc};
 }
 
 PG::interruptible_future<> PG::complete_error_log(const ceph_tid_t& rep_tid,
@@ -1078,8 +1089,8 @@ PG::run_executer_fut PG::run_executer(
 {
   LOG_PREFIX(PG::run_executer);
   auto rollbacker = ox.create_rollbacker(
-    [stored_obc=duplicate_obc(obc)](auto &obc) mutable {
-      obc->update_from(*stored_obc);
+    [obc_data = duplicate_obc_data(obc)](auto &obc) mutable {
+      obc->update_from(obc_data);
     });
   auto rollback_on_error = seastar::defer([&rollbacker] {
     rollbacker.rollback_obc_if_modified();

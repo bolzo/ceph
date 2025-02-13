@@ -342,6 +342,7 @@ BackfillState::Enqueuing::Enqueuing(my_context ctx)
 
   do {
     if (!backfill_listener().budget_available()) {
+      DEBUGDPP("throttle failed, turning to Waiting", pg());
       post_event(RequestWaiting{});
       return;
     } else if (should_rescan_replicas(backfill_state().peer_backfill_info,
@@ -380,16 +381,25 @@ BackfillState::Enqueuing::Enqueuing(my_context ctx)
     }
   } while (!all_emptied(primary_bi, backfill_state().peer_backfill_info));
 
-  if (backfill_state().progress_tracker->tracked_objects_completed()
-      && Enqueuing::all_enqueued(peering_state(),
-				 backfill_state().backfill_info,
-				 backfill_state().peer_backfill_info)) {
-    backfill_state().last_backfill_started = hobject_t::get_max();
-    backfill_listener().update_peers_last_backfill(hobject_t::get_max());
+  if (should_rescan_primary(backfill_state().peer_backfill_info,
+				   primary_bi)) {
+    // need to grab one another chunk of the object namespace and restart
+    // the queueing.
+    DEBUGDPP("reached end for current local chunk", pg());
+    post_event(RequestPrimaryScanning{});
+    return;
+  } else {
+    if (backfill_state().progress_tracker->tracked_objects_completed()
+	&& Enqueuing::all_enqueued(peering_state(),
+				   backfill_state().backfill_info,
+				   backfill_state().peer_backfill_info)) {
+      backfill_state().last_backfill_started = hobject_t::get_max();
+      backfill_listener().update_peers_last_backfill(hobject_t::get_max());
+    }
+    DEBUGDPP("reached end for both local and all peers "
+	     "but still has in-flight operations", pg());
+    post_event(RequestWaiting{});
   }
-  DEBUGDPP("reached end for both local and all peers "
-	   "but still has in-flight operations", pg());
-  post_event(RequestWaiting{});
 }
 
 // -- PrimaryScanning
@@ -417,7 +427,7 @@ BackfillState::PrimaryScanning::react(PrimaryScanned evt)
 }
 
 boost::statechart::result
-BackfillState::PrimaryScanning::react(CancelBackfill evt)
+BackfillState::PrimaryScanning::react(SuspendBackfill evt)
 {
   LOG_PREFIX(BackfillState::PrimaryScanning::react::SuspendBackfill);
   DEBUGDPP("suspended within PrimaryScanning", pg());
@@ -513,7 +523,7 @@ BackfillState::ReplicasScanning::react(ReplicaScanned evt)
 }
 
 boost::statechart::result
-BackfillState::ReplicasScanning::react(CancelBackfill evt)
+BackfillState::ReplicasScanning::react(SuspendBackfill evt)
 {
   LOG_PREFIX(BackfillState::ReplicasScanning::react::SuspendBackfill);
   DEBUGDPP("suspended within ReplicasScanning", pg());
@@ -566,7 +576,7 @@ BackfillState::Waiting::react(ObjectPushed evt)
 }
 
 boost::statechart::result
-BackfillState::Waiting::react(CancelBackfill evt)
+BackfillState::Waiting::react(SuspendBackfill evt)
 {
   LOG_PREFIX(BackfillState::Waiting::react::SuspendBackfill);
   DEBUGDPP("suspended within Waiting", pg());
@@ -674,6 +684,17 @@ void BackfillState::enqueue_standalone_push(
   const std::vector<pg_shard_t> &peers) {
   progress_tracker->enqueue_push(obj);
   backfill_machine.backfill_listener.enqueue_push(obj, v, peers);
+}
+
+void BackfillState::enqueue_standalone_delete(
+  const hobject_t &obj,
+  const eversion_t &v,
+  const std::vector<pg_shard_t> &peers)
+{
+  progress_tracker->enqueue_drop(obj);
+  for (auto bt : peers) {
+    backfill_machine.backfill_listener.enqueue_drop(bt, obj, v);
+  }
 }
 
 std::ostream &operator<<(std::ostream &out, const BackfillState::PGFacade &pg) {

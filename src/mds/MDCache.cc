@@ -8452,6 +8452,13 @@ int MDCache::path_traverse(const MDRequestRef& mdr, MDSContextFactory& cf,
       }
     }
     ceph_assert(curdir);
+
+    if (mds->damage_table.is_dirfrag_damaged(curdir)) {
+      dout(4) << "traverse: stopped lookup at dirfrag "
+              << *curdir << "/" << path[depth] << " snap=" << snapid << dendl;
+      return -CEPHFS_EIO;
+    }
+
     if (pdir) {
       *pdir = curdir;
     }
@@ -8515,8 +8522,11 @@ int MDCache::path_traverse(const MDRequestRef& mdr, MDSContextFactory& cf,
 	  lov.add_xlock(&dn->lock);
 	} else {
 	  // force client to flush async dir operation if necessary
-	  if (cur->filelock.is_cached())
+	  if (cur->filelock.is_cached() &&
+	      !(mdr->lock_cache &&
+		static_cast<const MutationImpl*>(mdr->lock_cache)->is_wrlocked(&cur->filelock))) {
 	    lov.add_wrlock(&cur->filelock);
+	  }
 	  lov.add_rdlock(&dn->lock);
 	}
 	if (!mds->locker->acquire_locks(mdr, lov)) {
@@ -8524,7 +8534,7 @@ int MDCache::path_traverse(const MDRequestRef& mdr, MDSContextFactory& cf,
 	}
       } else if (!path_locked &&
 		 !dn->lock.can_read(client) &&
-		 !(dn->lock.is_xlocked() && dn->lock.get_xlock_by() == mdr)) {
+		 !(dn->lock.is_xlocked() && dn->lock.is_xlocked_by(mdr))) {
 	dout(10) << "traverse: non-readable dentry at " << *dn << dendl;
 	dn->lock.add_waiter(SimpleLock::WAIT_RD, cf.build());
 	if (mds->logger)
@@ -8635,8 +8645,11 @@ int MDCache::path_traverse(const MDRequestRef& mdr, MDSContextFactory& cf,
 		lov.add_xlock(&dn->lock);
 	      } else {
 		// force client to flush async dir operation if necessary
-		if (cur->filelock.is_cached())
+		if (cur->filelock.is_cached() &&
+		    !(mdr->lock_cache &&
+		      static_cast<const MutationImpl*>(mdr->lock_cache)->is_wrlocked(&cur->filelock))) {
 		  lov.add_wrlock(&cur->filelock);
+		}
 		lov.add_rdlock(&dn->lock);
 	      }
 	      if (!mds->locker->acquire_locks(mdr, lov)) {
@@ -13531,6 +13544,10 @@ void MDCache::repair_inode_stats_work(const MDRequestRef& mdr)
       if (!dir) {
         ceph_assert(mdr->is_auth_pinned(diri));
         dir = diri->get_or_open_dirfrag(this, leaf);
+      }
+      if (mds->damage_table.is_dirfrag_damaged(dir)) {
+        mds->server->respond_to_request(mdr, -CEPHFS_EIO);
+        return;
       }
       if (dir->get_version() == 0) {
         ceph_assert(dir->is_auth());

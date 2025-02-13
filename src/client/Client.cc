@@ -5524,7 +5524,7 @@ void Client::handle_cap_export(MetaSession *session, Inode *in, const MConstRef<
 	      ceph_seq_cmp(tcap.seq, m->peer.issue_seq) < 0) {
 	    tcap.cap_id = m->peer.cap_id;
 	    tcap.seq = m->peer.issue_seq - 1;
-	    tcap.issue_seq = tcap.issue_seq;
+	    tcap.issue_seq = m->peer.issue_seq - 1;
 	    tcap.issued |= cap.issued;
 	    tcap.implemented |= cap.issued;
 	    if (&cap == in->auth_cap)
@@ -10444,8 +10444,17 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp,
 
   // success?
   if (result >= 0) {
-    if (fhp)
+    if (fhp) {
       *fhp = _create_fh(in, flags, cmode, perms);
+      // ceph_flags_sys2wire/ceph_flags_to_mode() calls above transforms O_DIRECTORY flag
+      // into CEPH_FILE_MODE_PIN mode. Although this mode is used at server size
+      // we [ab]use it here to determine whether we should pin inode to prevent from
+      // undesired cache eviction.
+      if (cmode == CEPH_FILE_MODE_PIN) {
+        ldout(cct, 20) << " pinning ll_get() call for " << *in << dendl;
+        _ll_get(in);
+      }
+    }
   } else {
     in->put_open_ref(cmode);
   }
@@ -10502,6 +10511,10 @@ int Client::_close(int fd)
   Fh *fh = get_filehandle(fd);
   if (!fh)
     return -CEPHFS_EBADF;
+  if (fh->mode == CEPH_FILE_MODE_PIN) {
+    ldout(cct, 20) << " unpinning ll_put() call for " << *(fh->inode.get()) << dendl;
+    _ll_put(fh->inode.get(), 1);
+  }
   int err = _release_fh(fh);
   fd_map.erase(fd);
   put_fd(fd);
@@ -10990,7 +11003,7 @@ retry:
     // C_Read_Sync_NonBlocking::finish().
 
     // trim read based on file size?
-    if ((offset >= in->size) || (size == 0)) {
+    if (std::cmp_greater_equal(offset, in->size) || (size == 0)) {
       // read is requested at the EOF or the read len is zero, therefore just
       // release managed pointers and complete the C_Read_Finisher immediately with 0 bytes
 

@@ -303,7 +303,6 @@ protected:
       virtual const std::string& get_name() const override;
       virtual bool is_writeable() override;
       virtual bool get_redirect_endpoint(std::string* endpoint) override;
-      virtual bool has_zonegroup_api(const std::string& api) const override;
       virtual const std::string& get_current_period_id() override;
       virtual const RGWAccessKey& get_system_key() override;
       virtual const std::string& get_realm_name() override;
@@ -529,6 +528,7 @@ protected:
 
       DBObject(DBObject& _o) = default;
 
+      virtual unsigned get_subsys() { return ceph_subsys_rgw_dbstore; };
       virtual int delete_object(const DoutPrefixProvider* dpp,
           optional_yield y,
           uint32_t flags,
@@ -554,6 +554,13 @@ protected:
       virtual int set_acl(const RGWAccessControlPolicy& acl) override { acls = acl; return 0; }
 
       virtual int set_obj_attrs(const DoutPrefixProvider* dpp, Attrs* setattrs, Attrs* delattrs, optional_yield y, uint32_t flags) override;
+
+      /** If multipart, enumerate (a range [marker..marker+[min(max_parts, parts_count-1)] of) parts of the object */
+      virtual int list_parts(const DoutPrefixProvider* dpp, CephContext* cct,
+			   int max_parts, int marker, int* next_marker,
+			   bool* truncated, list_parts_each_t each_func,
+			   optional_yield y) override;
+
       virtual int load_obj_state(const DoutPrefixProvider* dpp, optional_yield y, bool follow_olh = true) override;
       virtual int get_obj_attrs(optional_yield y, const DoutPrefixProvider* dpp, rgw_obj* target_obj = NULL) override;
       virtual int modify_obj_attrs(const char* attr_name, bufferlist& attr_val, optional_yield y, const DoutPrefixProvider* dpp) override;
@@ -878,6 +885,7 @@ public:
       virtual int list_all_zones(const DoutPrefixProvider* dpp, std::list<std::string>& zone_ids) override;
       virtual int cluster_stat(RGWClusterStat& stats) override;
       virtual std::unique_ptr<Lifecycle> get_lifecycle(void) override;
+      virtual bool process_expired_objects(const DoutPrefixProvider *dpp, optional_yield y) override;
 
   virtual std::unique_ptr<Notification> get_notification(
     rgw::sal::Object* obj, rgw::sal::Object* src_obj, req_state* s,
