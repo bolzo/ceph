@@ -1,7 +1,7 @@
 import { CephServicePlacement } from '~/app/shared/models/service.interface';
 
 export interface SMBCluster {
-  resource_type: string;
+  resource_type: typeof CLUSTER_RESOURCE;
   cluster_id: string;
   auth_mode: typeof AUTHMODE[keyof typeof AUTHMODE];
   domain_settings?: DomainSettings;
@@ -9,11 +9,34 @@ export interface SMBCluster {
   custom_dns?: string[];
   placement?: CephServicePlacement;
   clustering?: typeof CLUSTERING;
-  public_addrs?: PublicAddress;
+  public_addrs?: PublicAddress[];
 }
 
-export interface RequestModel {
+export interface ClusterRequestModel {
   cluster_resource: SMBCluster;
+}
+
+export interface ShareRequestModel {
+  share_resource: SMBShare;
+}
+
+interface SMBCephfs {
+  volume: string;
+  path: string;
+  subvolumegroup?: string;
+  subvolume?: string;
+  provider?: string;
+}
+
+interface SMBShareLoginControl {
+  name: string;
+  access: 'read' | 'read-write' | 'none' | 'admin';
+  category?: 'user' | 'group';
+}
+
+export interface Filesystem {
+  id: string;
+  name: string;
 }
 
 export interface DomainSettings {
@@ -22,13 +45,13 @@ export interface DomainSettings {
 }
 
 export interface JoinSource {
-  source_type: string;
+  source_type?: string;
   ref: string;
 }
 
 export interface PublicAddress {
   address: string;
-  destination: string;
+  destination?: string;
 }
 
 export const CLUSTERING = {
@@ -53,10 +76,11 @@ export const PLACEMENT = {
 };
 
 export interface SMBShare {
+  resource_type: string;
   cluster_id: string;
   share_id: string;
-  intent: string;
   cephfs: SMBCephfs;
+  intent?: string;
   name?: string;
   readonly?: boolean;
   browseable?: boolean;
@@ -81,7 +105,6 @@ interface SMBShareLoginControl {
 export interface SMBJoinAuth {
   resource_type: string;
   auth_id: string;
-  intent: Intent;
   auth: Auth;
   linked_to_cluster?: string;
 }
@@ -89,7 +112,6 @@ export interface SMBJoinAuth {
 export interface SMBUsersGroups {
   resource_type: string;
   users_groups_id: string;
-  intent: Intent;
   values: Value;
   linked_to_cluster?: string;
 }
@@ -99,12 +121,12 @@ interface Auth {
   password: string;
 }
 
-interface User {
+export interface User {
   name: string;
   password: string;
 }
 
-interface Group {
+export interface Group {
   name: string;
 }
 
@@ -113,6 +135,9 @@ interface Value {
   groups: Group[];
 }
 
-type Intent = 'present' | 'removed';
+export const CLUSTER_RESOURCE = 'ceph.smb.cluster' as const;
+export const SHARE_RESOURCE = 'ceph.smb.share' as const;
+export const JOIN_AUTH_RESOURCE = 'ceph.smb.join.auth' as const;
+export const USERSGROUPS_RESOURCE = 'ceph.smb.usersgroups' as const;
 
-export const CLUSTER_RESOURCE = 'ceph.smb.cluster';
+export const PROVIDER = 'samba-vfs';

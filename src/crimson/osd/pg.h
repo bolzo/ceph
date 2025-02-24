@@ -21,6 +21,7 @@
 #include "crimson/osd/object_context.h"
 #include "osd/PeeringState.h"
 #include "osd/SnapMapper.h"
+#include "osd/DynamicPerfStats.h"
 
 #include "crimson/common/interruptible_future.h"
 #include "crimson/common/log.h"
@@ -64,7 +65,6 @@ namespace crimson::os {
 
 namespace crimson::osd {
 class OpsExecuter;
-class BackfillRecovery;
 class SnapTrimEvent;
 class PglogBasedRecovery;
 
@@ -765,8 +765,25 @@ public:
 
 private:
   std::optional<pg_stat_t> pg_stats;
+  DynamicPerfStats dp_stats;
 
 public:
+  void add_client_request_lat(
+    const ClientRequest& req,
+    size_t inb,
+    size_t outb,
+    const utime_t &lat) {
+    if (dp_stats.is_enabled()) {
+      dp_stats.add(pg_whoami.osd, get_info(), req, inb, outb, lat);
+    }
+  }
+  void set_dynamic_perf_stats_queries(
+    const std::list<OSDPerfMetricQuery> &queries) {
+    dp_stats.set_queries(queries);
+  }
+  void get_dynamic_perf_stats(DynamicPerfStats *stats) {
+    std::swap(dp_stats, *stats);
+  }
   OSDriver &get_osdriver() final {
     return osdriver;
   }
@@ -892,7 +909,6 @@ private:
   friend class RepRequest;
   friend class LogMissingRequest;
   friend class LogMissingRequestReply;
-  friend class BackfillRecovery;
   friend struct PGFacade;
   friend class InternalClientRequest;
   friend class WatchTimeoutRequest;

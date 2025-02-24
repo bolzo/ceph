@@ -1,14 +1,23 @@
 import { Component, Input, OnInit, ViewChild } from '@angular/core';
 import { Observable, BehaviorSubject, of } from 'rxjs';
+import { switchMap, catchError } from 'rxjs/operators';
 import { TableComponent } from '~/app/shared/datatable/table/table.component';
+import { CdTableAction } from '~/app/shared/models/cd-table-action';
 import { CdTableColumn } from '~/app/shared/models/cd-table-column';
 import { CdTableFetchDataContext } from '~/app/shared/models/cd-table-fetch-data-context';
 import { Permission } from '~/app/shared/models/permissions';
 import { SMBShare } from '../smb.model';
-import { switchMap, catchError } from 'rxjs/operators';
 import { SmbService } from '~/app/shared/api/smb.service';
 import { AuthStorageService } from '~/app/shared/services/auth-storage.service';
 import { CellTemplate } from '~/app/shared/enum/cell-template.enum';
+import { CdTableSelection } from '~/app/shared/models/cd-table-selection';
+import { ActionLabelsI18n } from '~/app/shared/constants/app.constants';
+import { Icons } from '~/app/shared/enum/icons.enum';
+import { DeleteConfirmationModalComponent } from '~/app/shared/components/delete-confirmation-modal/delete-confirmation-modal.component';
+import { FinishedTask } from '~/app/shared/models/finished-task';
+import { ModalCdsService } from '~/app/shared/services/modal-cds.service';
+import { NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
+import { TaskWrapperService } from '~/app/shared/services/task-wrapper.service';
 
 @Component({
   selector: 'cd-smb-share-list',
@@ -22,12 +31,21 @@ export class SmbShareListComponent implements OnInit {
   table: TableComponent;
   columns: CdTableColumn[];
   permission: Permission;
+  selection = new CdTableSelection();
+  tableActions: CdTableAction[];
   context: CdTableFetchDataContext;
 
   smbShares$: Observable<SMBShare[]>;
   subject$ = new BehaviorSubject<SMBShare[]>([]);
+  modalRef: NgbModalRef;
 
-  constructor(private authStorageService: AuthStorageService, private smbService: SmbService) {
+  constructor(
+    private authStorageService: AuthStorageService,
+    public actionLabels: ActionLabelsI18n,
+    private smbService: SmbService,
+    private taskWrapper: TaskWrapperService,
+    private modalService: ModalCdsService
+  ) {
     this.permission = this.authStorageService.getPermissions().smb;
   }
 
@@ -70,6 +88,21 @@ export class SmbShareListComponent implements OnInit {
         flexGrow: 2
       }
     ];
+    this.tableActions = [
+      {
+        name: `${this.actionLabels.CREATE}`,
+        permission: 'create',
+        icon: Icons.add,
+        routerLink: () => ['/cephfs/smb/share/create', this.clusterId],
+        canBePrimary: (selection: CdTableSelection) => !selection.hasSingleSelection
+      },
+      {
+        permission: 'delete',
+        icon: Icons.destroy,
+        click: () => this.deleteShareModal(),
+        name: this.actionLabels.DELETE
+      }
+    ];
 
     this.smbShares$ = this.subject$.pipe(
       switchMap(() =>
@@ -85,5 +118,27 @@ export class SmbShareListComponent implements OnInit {
 
   loadSMBShares() {
     this.subject$.next([]);
+  }
+
+  updateSelection(selection: CdTableSelection) {
+    this.selection = selection;
+  }
+
+  deleteShareModal() {
+    const cluster_id = this.selection.first().cluster_id;
+    const share_id = this.selection.first().share_id;
+    const name = this.selection.first().name;
+
+    this.modalRef = this.modalService.show(DeleteConfirmationModalComponent, {
+      itemDescription: $localize`SMB Share`,
+      itemNames: [`Share: ${share_id} (${name}) from cluster: ${cluster_id}`],
+      submitActionObservable: () =>
+        this.taskWrapper.wrapTaskAroundCall({
+          task: new FinishedTask('smb/share/delete', {
+            share_id: share_id
+          }),
+          call: this.smbService.deleteShare(cluster_id, share_id)
+        })
+    });
   }
 }

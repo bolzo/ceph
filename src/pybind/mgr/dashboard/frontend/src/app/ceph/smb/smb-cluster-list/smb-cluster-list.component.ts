@@ -19,9 +19,8 @@ import { Icons } from '~/app/shared/enum/icons.enum';
 import { CdTableSelection } from '~/app/shared/models/cd-table-selection';
 import { URLBuilderService } from '~/app/shared/services/url-builder.service';
 import { SMBCluster } from '../smb.model';
-import { NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { ModalCdsService } from '~/app/shared/services/modal-cds.service';
-import { CriticalConfirmationModalComponent } from '~/app/shared/components/critical-confirmation-modal/critical-confirmation-modal.component';
+import { DeleteConfirmationModalComponent } from '~/app/shared/components/delete-confirmation-modal/delete-confirmation-modal.component';
 import { TaskWrapperService } from '~/app/shared/services/task-wrapper.service';
 import { FinishedTask } from '~/app/shared/models/finished-task';
 
@@ -42,7 +41,6 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
   selection = new CdTableSelection();
   smbClusters$: Observable<SMBCluster[]>;
   subject$ = new BehaviorSubject<SMBCluster[]>([]);
-  modalRef: NgbModalRef;
 
   constructor(
     private authStorageService: AuthStorageService,
@@ -54,14 +52,6 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
   ) {
     super();
     this.permission = this.authStorageService.getPermissions().smb;
-    this.tableActions = [
-      {
-        permission: 'delete',
-        icon: Icons.destroy,
-        click: () => this.removeSMBClusterModal(),
-        name: this.actionLabels.REMOVE
-      }
-    ];
   }
 
   ngOnInit() {
@@ -79,12 +69,18 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
     ];
     this.tableActions = [
       {
-        name: `${this.actionLabels.CREATE}`,
+        name: `${this.actionLabels.CREATE} cluster`,
         permission: 'create',
         icon: Icons.add,
         routerLink: () => this.urlBuilder.getCreate(),
 
         canBePrimary: (selection: CdTableSelection) => !selection.hasSingleSelection
+      },
+      {
+        permission: 'delete',
+        icon: Icons.destroy,
+        click: () => this.removeSMBClusterModal(),
+        name: this.actionLabels.REMOVE
       }
     ];
 
@@ -111,7 +107,7 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
   removeSMBClusterModal() {
     const cluster_id = this.selection.first().cluster_id;
 
-    this.modalService.show(CriticalConfirmationModalComponent, {
+    this.modalService.show(DeleteConfirmationModalComponent, {
       itemDescription: $localize`Cluster`,
       itemNames: [cluster_id],
       actionDescription: $localize`remove`,

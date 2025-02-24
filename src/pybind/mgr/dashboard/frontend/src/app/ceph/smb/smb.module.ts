@@ -21,22 +21,25 @@ import {
   PlaceholderModule,
   SelectModule,
   TabsModule,
-  TagModule
+  TagModule,
+  FileUploaderModule
 } from 'carbon-components-angular';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { SharedModule } from '~/app/shared/shared.module';
 import { RouterModule } from '@angular/router';
 import { NgModule } from '@angular/core';
+import { SmbShareFormComponent } from './smb-share-form/smb-share-form.component';
 
 import { SmbUsersgroupsListComponent } from './smb-usersgroups-list/smb-usersgroups-list.component';
 import { SmbTabsComponent } from './smb-tabs/smb-tabs.component';
 import { SmbJoinAuthListComponent } from './smb-join-auth-list/smb-join-auth-list.component';
 import { SmbUsersgroupsDetailsComponent } from './smb-usersgroups-details/smb-usersgroups-details.component';
+import { SmbJoinAuthFormComponent } from './smb-join-auth-form/smb-join-auth-form.component';
+import { SmbUsersgroupsFormComponent } from './smb-usersgroups-form/smb-usersgroups-form.component';
 
 @NgModule({
   imports: [
-    ReactiveFormsModule,
     RouterModule,
     CommonModule,
     SharedModule,
@@ -49,6 +52,7 @@ import { SmbUsersgroupsDetailsComponent } from './smb-usersgroups-details/smb-us
     SelectModule,
     TabsModule,
     TagModule,
+    FileUploaderModule,
     InputModule,
     CheckboxModule,
     SelectModule,
@@ -71,7 +75,11 @@ import { SmbUsersgroupsDetailsComponent } from './smb-usersgroups-details/smb-us
     SmbUsersgroupsListComponent,
     SmbUsersgroupsDetailsComponent,
     SmbTabsComponent,
-    SmbJoinAuthListComponent
+    SmbJoinAuthListComponent,
+    SmbUsersgroupsDetailsComponent,
+    SmbJoinAuthFormComponent,
+    SmbUsersgroupsFormComponent,
+    SmbShareFormComponent
   ]
 })
 export class SmbModule {
