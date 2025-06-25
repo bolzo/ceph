@@ -4,7 +4,7 @@ import { BehaviorSubject, Observable, of } from 'rxjs';
 
 import _ from 'lodash';
 
-import { ActionLabelsI18n } from '~/app/shared/constants/app.constants';
+import { ActionLabelsI18n, URLVerbs } from '~/app/shared/constants/app.constants';
 import { TableComponent } from '~/app/shared/datatable/table/table.component';
 import { CdTableAction } from '~/app/shared/models/cd-table-action';
 import { CdTableColumn } from '~/app/shared/models/cd-table-column';
@@ -14,22 +14,23 @@ import { Permission } from '~/app/shared/models/permissions';
 
 import { AuthStorageService } from '~/app/shared/services/auth-storage.service';
 import { SmbService } from '~/app/shared/api/smb.service';
-
+import { SMBCluster } from '../smb.model';
 import { Icons } from '~/app/shared/enum/icons.enum';
 import { CdTableSelection } from '~/app/shared/models/cd-table-selection';
+import { NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { URLBuilderService } from '~/app/shared/services/url-builder.service';
-import { SMBCluster } from '../smb.model';
 import { ModalCdsService } from '~/app/shared/services/modal-cds.service';
 import { DeleteConfirmationModalComponent } from '~/app/shared/components/delete-confirmation-modal/delete-confirmation-modal.component';
 import { TaskWrapperService } from '~/app/shared/services/task-wrapper.service';
 import { FinishedTask } from '~/app/shared/models/finished-task';
 
-const BASE_URL = 'cephfs/smb';
+export const CLUSTER_PATH = 'cephfs/smb/cluster';
+
 @Component({
   selector: 'cd-smb-cluster-list',
   templateUrl: './smb-cluster-list.component.html',
   styleUrls: ['./smb-cluster-list.component.scss'],
-  providers: [{ provide: URLBuilderService, useValue: new URLBuilderService(BASE_URL) }]
+  providers: [{ provide: URLBuilderService, useValue: new URLBuilderService(CLUSTER_PATH) }]
 })
 export class SmbClusterListComponent extends ListWithDetails implements OnInit {
   @ViewChild('table', { static: true })
@@ -38,9 +39,10 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
   permission: Permission;
   tableActions: CdTableAction[];
   context: CdTableFetchDataContext;
-  selection = new CdTableSelection();
   smbClusters$: Observable<SMBCluster[]>;
   subject$ = new BehaviorSubject<SMBCluster[]>([]);
+  selection = new CdTableSelection();
+  modalRef: NgbModalRef;
 
   constructor(
     private authStorageService: AuthStorageService,
@@ -73,14 +75,20 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
         permission: 'create',
         icon: Icons.add,
         routerLink: () => this.urlBuilder.getCreate(),
-
         canBePrimary: (selection: CdTableSelection) => !selection.hasSingleSelection
+      },
+      {
+        name: this.actionLabels.EDIT,
+        permission: 'update',
+        icon: Icons.edit,
+        routerLink: () =>
+          this.selection.first() && this.urlBuilder.getEdit(this.selection.first().cluster_id)
       },
       {
         permission: 'delete',
         icon: Icons.destroy,
         click: () => this.removeSMBClusterModal(),
-        name: this.actionLabels.REMOVE
+        name: this.actionLabels.DELETE
       }
     ];
 
@@ -95,7 +103,6 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
       )
     );
   }
-
   loadSMBCluster() {
     this.subject$.next([]);
   }
@@ -110,10 +117,9 @@ export class SmbClusterListComponent extends ListWithDetails implements OnInit {
     this.modalService.show(DeleteConfirmationModalComponent, {
       itemDescription: $localize`Cluster`,
       itemNames: [cluster_id],
-      actionDescription: $localize`remove`,
       submitActionObservable: () =>
         this.taskWrapper.wrapTaskAroundCall({
-          task: new FinishedTask('smb/cluster/remove', {
+          task: new FinishedTask(`${CLUSTER_PATH}/${URLVerbs.DELETE}`, {
             cluster_id: cluster_id
           }),
           call: this.smbService.removeCluster(cluster_id)

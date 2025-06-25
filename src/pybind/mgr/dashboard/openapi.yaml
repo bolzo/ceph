@@ -1692,6 +1692,10 @@ paths:
           application/json:
             schema:
               properties:
+                data_pool:
+                  type: string
+                metadata_pool:
+                  type: string
                 name:
                   type: string
                 service_spec:
@@ -7278,12 +7282,7 @@ paths:
       - Multi-cluster
   /api/multi-cluster/check_token_status:
     get:
-      parameters:
-      - allowEmptyValue: true
-        in: query
-        name: clustersTokenMap
-        schema:
-          type: string
+      parameters: []
       responses:
         '200':
           content:
@@ -7546,7 +7545,12 @@ paths:
       - Multi-cluster
   /api/nfs-ganesha/cluster:
     get:
-      parameters: []
+      parameters:
+      - default: false
+        in: query
+        name: info
+        schema:
+          type: boolean
       responses:
         '200':
           content:
@@ -7568,7 +7572,12 @@ paths:
       - NFS-Ganesha
   /api/nfs-ganesha/export:
     get:
-      parameters: []
+      parameters:
+      - allowEmptyValue: true
+        in: query
+        name: cluster_id
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -7672,7 +7681,7 @@ paths:
             trace.
       security:
       - jwt: []
-      summary: List all NFS-Ganesha exports
+      summary: 'List all or cluster specific NFS-Ganesha exports '
       tags:
       - NFS-Ganesha
     post:
@@ -8233,6 +8242,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8283,6 +8297,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8312,6 +8331,8 @@ paths:
                 gw_group:
                   type: string
                 log_level:
+                  type: string
+                traddr:
                   type: string
               required:
               - log_level
@@ -8348,6 +8369,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8373,6 +8399,11 @@ paths:
       - allowEmptyValue: true
         in: query
         name: gw_group
+        schema:
+          type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
         schema:
           type: string
       responses:
@@ -8406,6 +8437,8 @@ paths:
                 log_level:
                   type: string
                 print_level:
+                  type: string
+                traddr:
                   type: string
               type: object
       responses:
@@ -8442,6 +8475,8 @@ paths:
               properties:
                 gw_group:
                   type: string
+                traddr:
+                  type: string
               type: object
       responses:
         '200':
@@ -8475,6 +8510,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8503,6 +8543,7 @@ paths:
             schema:
               properties:
                 enable_ha:
+                  default: true
                   description: Enable high availability
                   type: boolean
                 gw_group:
@@ -8515,9 +8556,10 @@ paths:
                 nqn:
                   description: NVMeoF subsystem NQN
                   type: string
+                traddr:
+                  type: string
               required:
               - nqn
-              - enable_ha
               type: object
       responses:
         '201':
@@ -8565,6 +8607,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '202':
           content:
@@ -8604,6 +8651,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8639,6 +8691,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -8672,6 +8729,11 @@ paths:
         description: NVMeoF gateway group
         in: query
         name: gw_group
+        schema:
+          type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
         schema:
           type: string
       responses:
@@ -8712,6 +8774,8 @@ paths:
                   type: string
                 host_nqn:
                   description: NVMeoF host NQN. Use "*" to allow any host.
+                  type: string
+                traddr:
                   type: string
               required:
               - host_nqn
@@ -8762,6 +8826,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '202':
           content:
@@ -8800,6 +8869,11 @@ paths:
         description: NVMeoF gateway group
         in: query
         name: gw_group
+        schema:
+          type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
         schema:
           type: string
       responses:
@@ -8965,6 +9039,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -9003,8 +9082,13 @@ paths:
                   description: NVMeoF namespace block size
                   type: integer
                 create_image:
-                  default: true
+                  default: false
                   description: Create RBD image
+                  type: boolean
+                force:
+                  default: false
+                  description: Force create namespace even it image is used by other
+                    namespace
                   type: boolean
                 gw_group:
                   description: NVMeoF gateway group
@@ -9012,6 +9096,10 @@ paths:
                 load_balancing_group:
                   description: Load balancing group
                   type: integer
+                no_auto_visible:
+                  default: false
+                  description: Namespace will be visible only for the allowed hosts
+                  type: boolean
                 rbd_image_name:
                   description: RBD image name
                   type: string
@@ -9026,6 +9114,12 @@ paths:
                   default: 1024
                   description: RBD image size
                   type: integer
+                traddr:
+                  type: string
+                trash_image:
+                  default: false
+                  description: Trash the RBD image when namespace is removed
+                  type: boolean
               required:
               - rbd_image_name
               type: object
@@ -9075,6 +9169,17 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
+      - default: 'false'
+        description: Force remove the RBD image
+        in: query
+        name: force
+        schema:
+          type: string
       responses:
         '202':
           content:
@@ -9118,6 +9223,11 @@ paths:
         description: NVMeoF gateway group
         in: query
         name: gw_group
+        schema:
+          type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
         schema:
           type: string
       responses:
@@ -9177,6 +9287,11 @@ paths:
                 rw_mbytes_per_second:
                   description: Read/Write MB/s
                   type: integer
+                traddr:
+                  type: string
+                trash_image:
+                  description: Trash RBD image after removing namespace
+                  type: boolean
                 w_mbytes_per_second:
                   description: Write MB/s
                   type: integer
@@ -9201,6 +9316,236 @@ paths:
       summary: Update an existing NVMeoF namespace
       tags:
       - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/add_host:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                host_nqn:
+                  description: NVMeoF host NQN. Use "*" to allow any host.
+                  type: string
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              required:
+              - host_nqn
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Adds a host to the specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/change_load_balancing_group:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                load_balancing_group:
+                  description: Load balancing group
+                  type: integer
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: set the load balancing group for specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/change_visibility:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                auto_visible:
+                  description: True if visible to all hosts
+                  type: boolean
+                force:
+                  default: false
+                  type: boolean
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              required:
+              - auto_visible
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: changes the visibility of the specified NVMeoF namespace to all or
+        selected hosts
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/del_host:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                host_nqn:
+                  description: NVMeoF host NQN. Use "*" to allow any host.
+                  type: string
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              required:
+              - host_nqn
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Removes a host from the specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
   /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/io_stats:
     get:
       parameters:
@@ -9222,6 +9567,11 @@ paths:
         name: gw_group
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: traddr
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -9240,6 +9590,241 @@ paths:
       security:
       - jwt: []
       summary: Get IO stats from specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/refresh_size:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: refresh the specified NVMeoF namespace to current RBD image size
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/resize:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                rbd_image_size:
+                  description: RBD image size
+                  type: integer
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              required:
+              - rbd_image_size
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: resize the specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/set_qos:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                force:
+                  default: false
+                  description: Set QOS limits even if they were changed by RBD
+                  type: boolean
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                r_mbytes_per_second:
+                  description: Read MB/s
+                  type: integer
+                rw_ios_per_second:
+                  description: Read/Write IOPS
+                  type: integer
+                rw_mbytes_per_second:
+                  description: Read/Write MB/s
+                  type: integer
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+                w_mbytes_per_second:
+                  description: Write MB/s
+                  type: integer
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: set QOS for specified NVMeoF namespace
+      tags:
+      - NVMe-oF Subsystem Namespace
+  /api/nvmeof/subsystem/{nqn}/namespace/{nsid}/set_rbd_trash_image:
+    put:
+      parameters:
+      - description: NVMeoF subsystem NQN
+        in: path
+        name: nqn
+        required: true
+        schema:
+          type: string
+      - description: NVMeoF Namespace ID
+        in: path
+        name: nsid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                gw_group:
+                  description: NVMeoF gateway group
+                  type: string
+                rbd_trash_image_on_delete:
+                  description: True if active
+                  type: boolean
+                traddr:
+                  description: NVMeoF gateway address
+                  type: string
+              required:
+              - rbd_trash_image_on_delete
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: changes the trash image on delete of the specified NVMeoF                 namespace
+        to all or selected hosts
       tags:
       - NVMe-oF Subsystem Namespace
   /api/osd:
@@ -11013,6 +11598,11 @@ paths:
         \ detailed account info.\n        - If detailed=False, returns only account\
         \ ids.\n        "
       parameters:
+      - allowEmptyValue: true
+        in: query
+        name: daemon_name
+        schema:
+          type: string
       - default: false
         in: query
         name: detailed
@@ -11049,6 +11639,9 @@ paths:
               properties:
                 account_name:
                   description: Account name
+                  type: string
+                daemon_name:
+                  description: Name of the daemon
                   type: string
                 email:
                   description: Email
@@ -11110,6 +11703,12 @@ paths:
         required: true
         schema:
           type: string
+      - allowEmptyValue: true
+        description: Name of the daemon
+        in: query
+        name: daemon_name
+        schema:
+          type: string
       responses:
         '202':
           content:
@@ -11142,6 +11741,12 @@ paths:
         in: path
         name: account_id
         required: true
+        schema:
+          type: string
+      - allowEmptyValue: true
+        description: Name of the daemon
+        in: query
+        name: daemon_name
         schema:
           type: string
       responses:
@@ -11182,6 +11787,9 @@ paths:
               properties:
                 account_name:
                   description: Account name
+                  type: string
+                daemon_name:
+                  description: Name of the daemon
                   type: string
                 email:
                   description: Email
@@ -11580,6 +12188,11 @@ paths:
         name: owner
         schema:
           type: string
+      - allowEmptyValue: true
+        in: query
+        name: tenant
+        schema:
+          type: string
       responses:
         '200':
           content:
@@ -11615,6 +12228,8 @@ paths:
                   default: ''
                   type: string
                 owner:
+                  type: string
+                tenant:
                   type: string
               type: object
       responses:
@@ -11672,33 +12287,13 @@ paths:
           application/json:
             schema:
               properties:
-                address:
-                  type: string
-                auth_method:
-                  type: string
-                client_cert:
-                  type: string
-                client_key:
+                config:
                   type: string
                 daemon_name:
                   type: string
                 encryption_type:
                   type: string
                 kms_provider:
-                  type: string
-                namespace:
-                  default: ''
-                  type: string
-                owner:
-                  type: string
-                secret_engine:
-                  type: string
-                secret_path:
-                  default: ''
-                  type: string
-                ssl_cert:
-                  type: string
-                token:
                   type: string
               type: object
       responses:
@@ -12947,6 +13542,209 @@ paths:
       - jwt: []
       tags:
       - RgwSite
+  /api/rgw/topic:
+    get:
+      parameters:
+      - allowEmptyValue: true
+        description: Name of the user
+        in: query
+        name: uid
+        schema:
+          type: string
+      - allowEmptyValue: true
+        description: Name of the tenant
+        in: query
+        name: tenant
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Get RGW Topic List
+      tags:
+      - RGW Topic Management
+    post:
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                amqp_ack_level:
+                  description: amqp ack level
+                  type: string
+                amqp_exchange:
+                  description: amqp exchange
+                  type: string
+                ca_location:
+                  description: ca location
+                  type: string
+                cloud_events:
+                  default: false
+                  description: cloud events
+                  type: string
+                daemon_name:
+                  type: string
+                kafka_ack_level:
+                  description: kafka ack level
+                  type: string
+                kafka_brokers:
+                  description: kafka brokers
+                  type: string
+                max_retries:
+                  description: max retries
+                  type: string
+                mechanism:
+                  description: mechanism
+                  type: string
+                name:
+                  description: Name of the topic
+                  type: string
+                opaque_data:
+                  description: ' opaque data'
+                  type: string
+                owner:
+                  type: string
+                persistent:
+                  default: false
+                  description: persistent
+                  type: boolean
+                policy:
+                  description: policy
+                  type: string
+                push_endpoint:
+                  description: Push Endpoint
+                  type: string
+                retry_sleep_duration:
+                  description: retry sleep duration
+                  type: string
+                time_to_live:
+                  description: Time to live
+                  type: string
+                use_ssl:
+                  default: false
+                  description: use ssl
+                  type: boolean
+                verify_ssl:
+                  default: false
+                  description: verify ssl
+                  type: boolean
+              required:
+              - name
+              type: object
+      responses:
+        '201':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource created.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Create a new RGW Topic
+      tags:
+      - RGW Topic Management
+  /api/rgw/topic/{name}:
+    delete:
+      parameters:
+      - description: Name of the user
+        in: path
+        name: name
+        required: true
+        schema:
+          type: string
+      - allowEmptyValue: true
+        description: Name of the tenant
+        in: query
+        name: tenant
+        schema:
+          type: string
+      responses:
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '204':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource deleted.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Delete RGW Topic
+      tags:
+      - RGW Topic Management
+    get:
+      parameters:
+      - description: Name of the user
+        in: path
+        name: name
+        required: true
+        schema:
+          type: string
+      - allowEmptyValue: true
+        description: Name of the tenant
+        in: query
+        name: tenant
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Get RGW Topic
+      tags:
+      - RGW Topic Management
   /api/rgw/user:
     get:
       parameters:
@@ -12993,6 +13791,11 @@ paths:
               properties:
                 access_key:
                   type: string
+                account_id:
+                  type: integer
+                account_root_user:
+                  default: false
+                  type: integer
                 daemon_name:
                   type: string
                 display_name:
@@ -13174,6 +13977,11 @@ paths:
           application/json:
             schema:
               properties:
+                account_id:
+                  type: integer
+                account_root_user:
+                  default: false
+                  type: integer
                 daemon_name:
                   type: string
                 display_name:
@@ -14109,6 +14917,33 @@ paths:
       - jwt: []
       tags:
       - RgwZonegroup
+  /api/rgw/zonegroup/get_placement_target_by_placement_id/{placement_id}:
+    get:
+      parameters:
+      - in: path
+        name: placement_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - RgwZonegroup
   /api/rgw/zonegroup/storage-class:
     post:
       parameters: []
@@ -14131,6 +14966,45 @@ paths:
             application/vnd.ceph.api.v1.0+json:
               type: object
           description: Resource created.
+        '202':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Operation is still executing. Please check the task queue.
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      tags:
+      - RgwZonegroup
+    put:
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                placement_targets:
+                  default: []
+                  type: string
+                zone_group:
+                  type: string
+              required:
+              - zone_group
+              type: object
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              type: object
+          description: Resource updated.
         '202':
           content:
             application/vnd.ceph.api.v1.0+json:
@@ -15036,6 +15910,23 @@ paths:
                       required:
                       - count
                       type: object
+                    public_addrs:
+                      description: Public Address
+                      items:
+                        properties:
+                          address:
+                            description: This address will be assigned to one of the
+                              host's network devices
+                            type: string
+                          destination:
+                            description: Defines where the system will assign the
+                              managed IPs.
+                            type: string
+                        required:
+                        - address
+                        - destination
+                        type: object
+                      type: array
                     resource_type:
                       description: ceph.smb.cluster
                       type: string
@@ -15063,6 +15954,7 @@ paths:
                 - domain_settings
                 - user_group_settings
                 - custom_dns
+                - public_addrs
                 - placement
                 type: array
           description: OK
@@ -15161,6 +16053,23 @@ paths:
                               required:
                               - count
                               type: object
+                            public_addrs:
+                              description: Public Address
+                              items:
+                                properties:
+                                  address:
+                                    description: This address will be assigned to
+                                      one of the host's network devices
+                                    type: string
+                                  destination:
+                                    description: Defines where the system will assign
+                                      the managed IPs.
+                                    type: string
+                                required:
+                                - address
+                                - destination
+                                type: object
+                              type: array
                             resource_type:
                               description: ceph.smb.cluster
                               type: string
@@ -15188,6 +16097,7 @@ paths:
                           - domain_settings
                           - user_group_settings
                           - custom_dns
+                          - public_addrs
                           - placement
                           type: object
                         state:
@@ -15334,6 +16244,23 @@ paths:
                     required:
                     - count
                     type: object
+                  public_addrs:
+                    description: Public Address
+                    items:
+                      properties:
+                        address:
+                          description: This address will be assigned to one of the
+                            host's network devices
+                          type: string
+                        destination:
+                          description: Defines where the system will assign the managed
+                            IPs.
+                          type: string
+                      required:
+                      - address
+                      - destination
+                      type: object
+                    type: array
                   resource_type:
                     description: ceph.smb.cluster
                     type: string
@@ -15360,6 +16287,7 @@ paths:
                 - domain_settings
                 - user_group_settings
                 - custom_dns
+                - public_addrs
                 - placement
                 type: object
           description: OK
@@ -15905,6 +16833,99 @@ paths:
       security:
       - jwt: []
       summary: Remove an smb share
+      tags:
+      - SMB
+    get:
+      description: "\n        Get an smb share by cluster and share id\n        "
+      parameters:
+      - description: Unique identifier for the cluster
+        in: path
+        name: cluster_id
+        required: true
+        schema:
+          type: string
+      - description: Unique identifier for the share
+        in: path
+        name: share_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/vnd.ceph.api.v1.0+json:
+              schema:
+                properties:
+                  browseable:
+                    description: Indicates if the share is browseable
+                    type: boolean
+                  cephfs:
+                    description: Configuration for the CephFS share
+                    properties:
+                      path:
+                        description: Path within the CephFS file system
+                        type: string
+                      provider:
+                        description: Provider of the CephFS share, e.g., 'samba-vfs'
+                        type: string
+                      subvolume:
+                        description: Subvolume within the CephFS file system
+                        type: string
+                      subvolumegroup:
+                        description: Subvolume Group in CephFS file system
+                        type: string
+                      volume:
+                        description: Name of the CephFS file system
+                        type: string
+                    required:
+                    - volume
+                    - path
+                    - provider
+                    - subvolumegroup
+                    - subvolume
+                    type: object
+                  cluster_id:
+                    description: Unique identifier for the cluster
+                    type: string
+                  intent:
+                    description: Desired state of the resource, e.g., 'present' or
+                      'removed'
+                    type: string
+                  name:
+                    description: Name of the share
+                    type: string
+                  readonly:
+                    description: Indicates if the share is read-only
+                    type: boolean
+                  resource_type:
+                    description: ceph.smb.share
+                    type: string
+                  share_id:
+                    description: Unique identifier for the share
+                    type: string
+                required:
+                - resource_type
+                - cluster_id
+                - share_id
+                - intent
+                - name
+                - readonly
+                - browseable
+                - cephfs
+                type: object
+          description: OK
+        '400':
+          description: Operation exception. Please check the response body for details.
+        '401':
+          description: Unauthenticated access. Please login first.
+        '403':
+          description: Unauthorized access. Please check your permissions.
+        '500':
+          description: Unexpected error. Please check the response body for the stack
+            trace.
+      security:
+      - jwt: []
+      summary: Get an smb share
       tags:
       - SMB
   /api/smb/usersgroups:
@@ -17630,6 +18651,8 @@ tags:
   name: PrometheusNotifications
 - description: List of RGW roles
   name: RGW
+- description: RGW Topic Management API
+  name: RGW Topic Management
 - description: RBD Management API
   name: Rbd
 - description: RBD Mirroring Management API

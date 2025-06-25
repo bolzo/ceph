@@ -194,6 +194,8 @@ def _get_pool_stats(pool_names):
             mirror_mode = "image"
         elif mirror_mode == rbd.RBD_MIRROR_MODE_POOL:
             mirror_mode = "pool"
+        elif mirror_mode == rbd.RBD_MIRROR_MODE_INIT_ONLY:
+            mirror_mode = "init-only"
         else:
             mirror_mode = "unknown"
 
@@ -239,8 +241,14 @@ class ReplayingData(NamedTuple):
 
 def _get_mirror_mode(ioctx, image_name):
     with rbd.Image(ioctx, image_name) as img:
-        mirror_mode = img.mirror_image_get_mode()
+        mirror_mode = None
         mirror_mode_str = 'Disabled'
+        try:
+            mirror_mode = img.mirror_image_get_mode()
+        except rbd.InvalidArgument:
+            # Suppress exception raised when mirroring is disabled
+            pass
+
         if mirror_mode == rbd.RBD_MIRROR_IMAGE_MODE_JOURNAL:
             mirror_mode_str = 'journal'
         elif mirror_mode == rbd.RBD_MIRROR_IMAGE_MODE_SNAPSHOT:
@@ -487,7 +495,8 @@ class RbdMirroringPoolMode(RESTController):
     MIRROR_MODES = {
         rbd.RBD_MIRROR_MODE_DISABLED: 'disabled',
         rbd.RBD_MIRROR_MODE_IMAGE: 'image',
-        rbd.RBD_MIRROR_MODE_POOL: 'pool'
+        rbd.RBD_MIRROR_MODE_POOL: 'pool',
+        rbd.RBD_MIRROR_MODE_INIT_ONLY: 'init-only'
     }
 
     @handle_rbd_mirror_error()

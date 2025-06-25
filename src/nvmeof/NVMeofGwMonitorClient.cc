@@ -39,6 +39,7 @@ NVMeofGwMonitorClient::NVMeofGwMonitorClient(int argc, const char **argv) :
   osdmap_epoch(0),
   gwmap_epoch(0),
   last_map_time(std::chrono::steady_clock::now()),
+  reset_timestamp(std::chrono::steady_clock::now()),
   monc{g_ceph_context, poolctx},
   client_messenger(Messenger::create(g_ceph_context, "async", entity_name_t::CLIENT(-1), "client", getpid())),
   objecter{g_ceph_context, client_messenger.get(), &monc, poolctx},
@@ -49,14 +50,6 @@ NVMeofGwMonitorClient::NVMeofGwMonitorClient(int argc, const char **argv) :
 }
 
 NVMeofGwMonitorClient::~NVMeofGwMonitorClient() = default;
-
-const char** NVMeofGwMonitorClient::get_tracked_conf_keys() const
-{
-  static const char* KEYS[] = {
-    NULL
-  };
-  return KEYS;
-}
 
 std::string read_file(const std::string& filename) {
     std::ifstream file(filename);
@@ -145,8 +138,7 @@ int NVMeofGwMonitorClient::init()
   }
 
   monc.sub_want("NVMeofGw", 0, 0);
-  monc.set_want_keys(CEPH_ENTITY_TYPE_MON|CEPH_ENTITY_TYPE_OSD
-      |CEPH_ENTITY_TYPE_MDS|CEPH_ENTITY_TYPE_MGR);
+  monc.set_want_keys(CEPH_ENTITY_TYPE_MON|CEPH_ENTITY_TYPE_OSD);
   monc.set_messenger(client_messenger.get());
 
   // We must register our config callback before calling init(), so
@@ -245,7 +237,7 @@ void NVMeofGwMonitorClient::send_beacon()
   auto group_key = std::make_pair(pool, group);
   NvmeGwClientState old_gw_state;
   // if already got gateway state in the map
-  if (get_gw_state("old map", map, group_key, name, old_gw_state))
+  if (first_beacon == false && get_gw_state("old map", map, group_key, name, old_gw_state))
     gw_availability = ok ? gw_availability_t::GW_AVAILABLE : gw_availability_t::GW_UNAVAILABLE;
   dout(10) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability <<
     " osdmap_epoch " << osdmap_epoch << " gwmap_epoch " << gwmap_epoch << dendl;
@@ -277,7 +269,7 @@ void NVMeofGwMonitorClient::tick()
 
   disconnect_panic();
   send_beacon();
-
+  first_beacon = false;
   timer.add_event_after(
       g_conf().get_val<std::chrono::seconds>("nvmeof_mon_client_tick_period").count(),
       new LambdaContext([this](int r){
@@ -313,18 +305,32 @@ void NVMeofGwMonitorClient::shutdown()
 
 void NVMeofGwMonitorClient::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
 {
-  last_map_time = std::chrono::steady_clock::now(); // record time of last monitor message
+  auto now = std::chrono::steady_clock::now();
+  last_map_time = now; // record time of last monitor message
 
   auto &new_map = nmap->get_map();
   gwmap_epoch = nmap->get_gwmap_epoch();
   auto group_key = std::make_pair(pool, group);
   dout(10) << "handle nvmeof gw map: " << new_map << dendl;
-
+  uint64_t reset_elapsed_seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(now - reset_timestamp).count();
   NvmeGwClientState old_gw_state;
+  uint64_t ignore_wrong_map_interval_sec =
+       g_conf().get_val<uint64_t>("mon_nvmeofgw_wrong_map_ignore_sec");
   auto got_old_gw_state = get_gw_state("old map", map, group_key, name, old_gw_state); 
   NvmeGwClientState new_gw_state;
   auto got_new_gw_state = get_gw_state("new map", new_map, group_key, name, new_gw_state); 
 
+  /*It is possible that wrong second map would be sent by monitor in rear cases when several GWs doing reboot
+  * and entity_address of the monitor client changes. So Monitor may send the unicast map to the wrong destination
+  * since this "old" address still appears in its map. It is asynchronous process in the monitor, better to protect
+  * from this scenario by silently ignoring the wrong map. This can happen just in the first several seconds after restart
+  */
+  if ( (reset_elapsed_seconds < ignore_wrong_map_interval_sec) &&
+        !got_new_gw_state && got_old_gw_state) {
+    dout(4) << "Wrong map received, Ignore it" << dendl;
+    return;
+  }
   // ensure that the gateway state has not vanished
   ceph_assert(got_new_gw_state || !got_old_gw_state);
 
@@ -428,16 +434,17 @@ void NVMeofGwMonitorClient::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
   map = new_map;
 }
 
-bool NVMeofGwMonitorClient::ms_dispatch2(const ref_t<Message>& m)
+Dispatcher::dispatch_result_t NVMeofGwMonitorClient::ms_dispatch2(const ref_t<Message>& m)
 {
   std::lock_guard l(lock);
   dout(10) << "got map type " << m->get_type() << dendl;
 
   if (m->get_type() == MSG_MNVMEOF_GW_MAP) {
     handle_nvmeof_gw_map(ref_cast<MNVMeofGwMap>(m));
+    return Dispatcher::HANDLED();
+
   }
-  bool handled = false;
-  return handled;
+  return Dispatcher::ACKNOWLEDGED();
 }
 
 int NVMeofGwMonitorClient::main(std::vector<const char *> args)

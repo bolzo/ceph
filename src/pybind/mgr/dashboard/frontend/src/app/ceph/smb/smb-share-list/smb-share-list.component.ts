@@ -9,15 +9,17 @@ import { Permission } from '~/app/shared/models/permissions';
 import { SMBShare } from '../smb.model';
 import { SmbService } from '~/app/shared/api/smb.service';
 import { AuthStorageService } from '~/app/shared/services/auth-storage.service';
-import { CellTemplate } from '~/app/shared/enum/cell-template.enum';
 import { CdTableSelection } from '~/app/shared/models/cd-table-selection';
-import { ActionLabelsI18n } from '~/app/shared/constants/app.constants';
+import { ActionLabelsI18n, URLVerbs } from '~/app/shared/constants/app.constants';
 import { Icons } from '~/app/shared/enum/icons.enum';
+import { CellTemplate } from '~/app/shared/enum/cell-template.enum';
 import { DeleteConfirmationModalComponent } from '~/app/shared/components/delete-confirmation-modal/delete-confirmation-modal.component';
 import { FinishedTask } from '~/app/shared/models/finished-task';
 import { ModalCdsService } from '~/app/shared/services/modal-cds.service';
 import { NgbModalRef } from '@ng-bootstrap/ng-bootstrap';
 import { TaskWrapperService } from '~/app/shared/services/task-wrapper.service';
+
+export const SHARE_PATH = 'cephfs/smb/share';
 
 @Component({
   selector: 'cd-smb-share-list',
@@ -93,8 +95,18 @@ export class SmbShareListComponent implements OnInit {
         name: `${this.actionLabels.CREATE}`,
         permission: 'create',
         icon: Icons.add,
-        routerLink: () => ['/cephfs/smb/share/create', this.clusterId],
+        routerLink: () => [`/${SHARE_PATH}/${URLVerbs.CREATE}`, this.clusterId],
         canBePrimary: (selection: CdTableSelection) => !selection.hasSingleSelection
+      },
+      {
+        name: this.actionLabels.EDIT,
+        permission: 'update',
+        icon: Icons.edit,
+        routerLink: () => [
+          `/${SHARE_PATH}/${URLVerbs.EDIT}`,
+          this.clusterId,
+          this.selection.first().name
+        ]
       },
       {
         permission: 'delete',
@@ -134,7 +146,7 @@ export class SmbShareListComponent implements OnInit {
       itemNames: [`Share: ${share_id} (${name}) from cluster: ${cluster_id}`],
       submitActionObservable: () =>
         this.taskWrapper.wrapTaskAroundCall({
-          task: new FinishedTask('smb/share/delete', {
+          task: new FinishedTask(`${SHARE_PATH}/${URLVerbs.DELETE}`, {
             share_id: share_id
           }),
           call: this.smbService.deleteShare(cluster_id, share_id)

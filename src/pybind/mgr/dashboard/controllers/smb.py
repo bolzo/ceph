@@ -36,6 +36,10 @@ CLUSTER_SCHEMA = {
         "ref": (str, "Reference identifier for the user group resource")
     }], "User group settings for user auth mode"),
     "custom_dns": ([str], "List of custom DNS server addresses"),
+    "public_addrs": ([{
+        "address": (str, "This address will be assigned to one of the host's network devices"),
+        "destination": (str, "Defines where the system will assign the managed IPs.")
+    }], "Public Address"),
     "placement": ({
         "count": (int, "Number of instances to place")
     }, "Placement configuration for the resource")
@@ -253,6 +257,19 @@ class SMBShare(RESTController):
                 json.dumps(share_resource)).to_simplified()
         except RuntimeError as e:
             raise DashboardException(e, component='smb')
+
+    @ReadPermission
+    @EndpointDoc("Get an smb share",
+                 parameters={
+                     'cluster_id': (str, 'Unique identifier for the cluster'),
+                     'share_id': (str, 'Unique identifier for the share')
+                 },
+                 responses={200: SHARE_SCHEMA})
+    def get(self, cluster_id: str, share_id: str) -> Share:
+        """
+        Get an smb share by cluster and share id
+        """
+        return mgr.remote('smb', 'show', [f'{self._resource}.{cluster_id}.{share_id}'])
 
     @raise_on_failure
     @DeletePermission

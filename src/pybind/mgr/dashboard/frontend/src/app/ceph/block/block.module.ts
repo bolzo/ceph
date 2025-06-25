@@ -63,15 +63,18 @@ import {
   RadioModule,
   SelectModule,
   UIShellModule,
-  TreeviewModule
+  TreeviewModule,
+  TabsModule
 } from 'carbon-components-angular';
 
 // Icons
 import ChevronDown from '@carbon/icons/es/chevron--down/16';
 import Close from '@carbon/icons/es/close/32';
-import AddFilled from '@carbon/icons/es/add--filled/32';
+import AddFilled from '@carbon/icons/es/add--filled/20';
 import SubtractFilled from '@carbon/icons/es/subtract--filled/32';
 import Reset from '@carbon/icons/es/reset/32';
+import SubtractAlt from '@carbon/icons/es/subtract--alt/20';
+import ProgressBarRound from '@carbon/icons/es/progress-bar--round/32';
 
 @NgModule({
   imports: [
@@ -97,7 +100,8 @@ import Reset from '@carbon/icons/es/reset/32';
     NumberModule,
     ModalModule,
     DatePickerModule,
-    ComboBoxModule
+    ComboBoxModule,
+    TabsModule
   ],
   declarations: [
     RbdListComponent,
@@ -140,7 +144,15 @@ import Reset from '@carbon/icons/es/reset/32';
 })
 export class BlockModule {
   constructor(private iconService: IconService) {
-    this.iconService.registerAll([ChevronDown, Close, AddFilled, SubtractFilled, Reset]);
+    this.iconService.registerAll([
+      ChevronDown,
+      Close,
+      AddFilled,
+      SubtractFilled,
+      Reset,
+      ProgressBarRound,
+      SubtractAlt
+    ]);
   }
 }
 

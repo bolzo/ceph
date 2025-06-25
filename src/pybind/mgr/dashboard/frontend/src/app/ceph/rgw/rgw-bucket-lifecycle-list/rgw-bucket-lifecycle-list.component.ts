@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { Bucket } from '../models/rgw-bucket';
 import { RgwBucketService } from '~/app/shared/api/rgw-bucket.service';
 import { AuthStorageService } from '~/app/shared/services/auth-storage.service';
@@ -17,6 +17,7 @@ import { Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { NotificationService } from '~/app/shared/services/notification.service';
 import { NotificationType } from '~/app/shared/enum/notification-type.enum';
+import { Lifecycle, Rule } from '../models/rgw-bucket-lifecycle';
 
 @Component({
   selector: 'cd-rgw-bucket-lifecycle-list',
@@ -25,6 +26,7 @@ import { NotificationType } from '~/app/shared/enum/notification-type.enum';
 })
 export class RgwBucketLifecycleListComponent implements OnInit {
   @Input() bucket: Bucket;
+  @Output() updateBucketDetails = new EventEmitter();
   @ViewChild(TableComponent, { static: true })
   table: TableComponent;
   permission: Permission;
@@ -93,9 +95,9 @@ export class RgwBucketLifecycleListComponent implements OnInit {
 
   loadLifecyclePolicies(context: CdTableFetchDataContext) {
     const allLifecycleRules$ = this.rgwBucketService
-      .getLifecycle(this.bucket.bucket, this.bucket.owner)
+      .getLifecycle(this.bucket.bucket, this.bucket.owner, this.bucket.tenant)
       .pipe(
-        tap((lifecycle) => {
+        tap((lifecycle: Lifecycle) => {
           this.lifecycleRuleList = lifecycle;
         }),
         catchError(() => {
@@ -107,7 +109,7 @@ export class RgwBucketLifecycleListComponent implements OnInit {
     this.filteredLifecycleRules$ = allLifecycleRules$.pipe(
       map(
         (lifecycle: any) =>
-          lifecycle?.LifecycleConfiguration?.Rules?.filter((rule: object) =>
+          lifecycle?.LifecycleConfiguration?.Rule?.filter((rule: Rule) =>
             rule.hasOwnProperty('Transition')
           ) || []
       )
@@ -115,11 +117,12 @@ export class RgwBucketLifecycleListComponent implements OnInit {
   }
 
   openTieringModal(type: string) {
-    this.modalService.show(RgwBucketTieringFormComponent, {
+    const modalRef = this.modalService.show(RgwBucketTieringFormComponent, {
       bucket: this.bucket,
       selectedLifecycle: this.selection.first(),
       editing: type === this.actionLabels.EDIT ? true : false
     });
+    modalRef?.close?.subscribe(() => this.updateBucketDetails.emit());
   }
 
   updateSelection(selection: CdTableSelection) {
@@ -128,10 +131,10 @@ export class RgwBucketLifecycleListComponent implements OnInit {
 
   deleteAction() {
     const ruleNames = this.selection.selected.map((rule) => rule.ID);
-    const filteredRules = this.lifecycleRuleList.LifecycleConfiguration.Rules.filter(
-      (rule: any) => !ruleNames.includes(rule.ID)
+    const filteredRules = this.lifecycleRuleList.LifecycleConfiguration.Rule.filter(
+      (rule: Rule) => !ruleNames.includes(rule.ID)
     );
-    const rules = filteredRules.length > 0 ? { Rules: filteredRules } : {};
+    const rules = filteredRules.length > 0 ? { Rule: filteredRules } : {};
     this.modalRef = this.modalService.show(DeleteConfirmationModalComponent, {
       itemDescription: $localize`Rule`,
       itemNames: ruleNames,
@@ -142,13 +145,19 @@ export class RgwBucketLifecycleListComponent implements OnInit {
 
   submitLifecycleConfig(rules: any) {
     this.rgwBucketService
-      .setLifecycle(this.bucket.bucket, JSON.stringify(rules), this.bucket.owner)
+      .setLifecycle(
+        this.bucket.bucket,
+        JSON.stringify(rules),
+        this.bucket.owner,
+        this.bucket.tenant
+      )
       .subscribe({
         next: () => {
           this.notificationService.show(
             NotificationType.success,
             $localize`Lifecycle rule deleted successfully`
           );
+          this.updateBucketDetails.emit();
         },
         error: () => {
           this.modalRef.componentInstance.stopLoadingSpinner();
